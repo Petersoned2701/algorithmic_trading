@@ -75,6 +75,18 @@ def test_chain_reads_each_year_once(make_store, monkeypatch):
     assert len(calls) == 1
 
 
+def test_chain_alternating_underlyings_reads_each_once(make_store, monkeypatch):
+    st = QuoteStore(make_store({"SPY": [100.0] * 3, "QQQ": [50.0] * 3}))
+    ts = st.timestamps(["SPY", "QQQ"])
+    calls = []
+    real = pl.read_parquet
+    monkeypatch.setattr(pl, "read_parquet", lambda *a, **k: calls.append(a) or real(*a, **k))
+    for t in ts:
+        assert st.chain("SPY", t)["underlying"].unique().to_list() == ["SPY"]
+        assert st.chain("QQQ", t)["underlying"].unique().to_list() == ["QQQ"]
+    assert len(calls) == 2
+
+
 def test_chain_across_year_boundary(make_store):
     root = make_store({"SPY": [100.0] * 4}, start=date(2024, 12, 30))
     assert sorted(p.name for p in (root / "quotes/underlying=SPY").iterdir()) == [

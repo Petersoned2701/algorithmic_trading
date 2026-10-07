@@ -54,7 +54,7 @@ def write_quotes(df: pl.DataFrame, data_root: Path) -> ImportSummary:
 class QuoteStore:
     def __init__(self, data_root: Path):
         self.data_root = data_root
-        self._chain_cache: tuple[tuple[str, int], pl.DataFrame] | None = None
+        self._chain_cache: dict[str, tuple[int, dict[datetime, pl.DataFrame]]] = {}
         self._underlying_cache: dict[str, pl.DataFrame] = {}
         self._atm_iv_cache: dict[tuple[str, int], pl.DataFrame] = {}
 
@@ -84,15 +84,17 @@ class QuoteStore:
 
     def chain(self, underlying: str, ts: datetime) -> pl.DataFrame:
         year = ts.astimezone(NEW_YORK).year
-        key = (underlying, year)
-        if self._chain_cache is None or self._chain_cache[0] != key:
+        cached = self._chain_cache.get(underlying)
+        if cached is None or cached[0] != year:
             year_dir = self._underlying_dir(underlying) / f"year={year}"
             if not year_dir.is_dir():
                 raise DataError(f"no quotes for {underlying} in {year}")
             frame = pl.read_parquet(year_dir / "*.parquet", hive_partitioning=False)
-            self._chain_cache = (key, frame.select(list(QUOTE_SCHEMA)))
-        rows = self._chain_cache[1].filter(pl.col("ts") == ts)
-        if rows.is_empty():
+            by_ts = frame.select(list(QUOTE_SCHEMA)).partition_by("ts", as_dict=True)
+            cached = (year, {key[0]: part for key, part in by_ts.items()})
+            self._chain_cache[underlying] = cached
+        rows = cached[1].get(ts)
+        if rows is None:
             raise DataError(f"no quotes for {underlying} at {ts.isoformat()}")
         return rows
 
