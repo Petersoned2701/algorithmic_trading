@@ -185,3 +185,26 @@ def test_compute_metrics_short_equity():
     )
     assert m["net_return"] == 0.0 and m["max_drawdown"] == 0.0 and m["max_drawdown_days"] == 0
     assert m["sharpe"] is None and m["sortino"] is None
+
+
+def test_sharpe_sortino_none_for_zero_span():
+    e = pl.DataFrame(
+        {
+            "ts": [snapshot_ts(date(2024, 1, 2))] * 4,
+            "equity": [100.0, 101.0, 100.0, 102.0],
+            "tbill": [5.0] * 4,
+        }
+    )
+    assert sharpe(e) is None and sortino(e) is None
+
+
+def test_annualized_return_wiped_out_does_not_raise():
+    assert annualized_return(eq([100, 50, -10])) == -1.0
+    m = compute_metrics(
+        eq([100, 50, -10]),
+        pl.DataFrame(schema={"pnl": pl.Float64, "commissions": pl.Float64}),
+        RunStats(),
+        dropped_rows=0,
+    )
+    assert m["annualized_return"] == -1.0 and m["net_return"] == pytest.approx(-1.1)
+    json.dumps(m)

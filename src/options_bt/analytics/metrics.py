@@ -22,6 +22,8 @@ def annualized_return(equity: pl.DataFrame) -> float:
     years = _years(equity["ts"])
     if years == 0:
         return 0.0
+    if equity["equity"][-1] <= 0:
+        return -1.0
     return float((equity["equity"][-1] / equity["equity"][0]) ** (1 / years) - 1)
 
 
@@ -63,8 +65,10 @@ def max_drawdown(equity: pl.DataFrame) -> tuple[float, int]:
 
 def _excess_returns(equity: pl.DataFrame) -> list[float]:
     ppy = periods_per_year(equity["ts"])
+    if ppy <= 0:
+        return []
     tbill = equity["tbill"] if "tbill" in equity.columns else pl.Series([None] * len(equity))
-    rf = tbill.cast(pl.Float64).fill_null(0.0) / 100 / ppy if ppy > 0 else tbill.fill_null(0.0)
+    rf = tbill.cast(pl.Float64).fill_null(0.0) / 100 / ppy
     excess = equity["equity"].pct_change() - rf
     return excess.drop_nulls().to_list()
 
