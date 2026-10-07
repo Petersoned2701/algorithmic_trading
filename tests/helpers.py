@@ -63,3 +63,7 @@ def L(
         settlement=settlement,
         entry_price=price,
     )
+
+
+TS_DATE = date(2024, 1, 2)
+TS = snapshot_ts(TS_DATE)
