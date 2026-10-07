@@ -61,6 +61,13 @@ def _table(header: list[str], rows: list[list[object]]) -> list[str]:
     return lines
 
 
+def checks_table(checks: list[CheckResult]) -> list[str]:
+    return _table(
+        ["Check", "Status", "Actual", "Threshold"],
+        [[c.name, c.status, c.actual, c.threshold] for c in checks],
+    )
+
+
 def render_report(
     name: str,
     metrics: dict,
@@ -69,10 +76,7 @@ def render_report(
     checks: list[CheckResult],
 ) -> str:
     lines = [f"# {name}", "", "## Go/no-go", ""]
-    lines += _table(
-        ["Check", "Status", "Actual", "Threshold"],
-        [[c.name, c.status, c.actual, c.threshold] for c in checks],
-    )
+    lines += checks_table(checks)
     lines += ["", "## Metrics", ""]
     lines += _table(["Metric", "Value"], [[k, v] for k, v in metrics.items()])
     lines += ["", "## Stress periods", ""]
