@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from options_bt.data.chain import ContractKey
+from options_bt.execution.settlement import intrinsic
 
 log = logging.getLogger(__name__)
 
@@ -56,15 +57,11 @@ def leg_value(legs: Sequence[Leg], prices: Sequence[float]) -> float:
     return sum(leg.qty * price * leg.multiplier for leg, price in zip(legs, prices, strict=True))
 
 
-def _intrinsic(leg: Leg, spot: float) -> float:
-    if leg.key.right == "C":
-        return max(spot - leg.key.strike, 0.0)
-    return max(leg.key.strike - spot, 0.0)
-
-
 def payoff_at_expiry(legs: Sequence[Leg], spot: float) -> float:
     """Dollars per unit at `spot`, intrinsic value only (premium excluded)."""
-    return sum(leg.qty * _intrinsic(leg, spot) * leg.multiplier for leg in legs)
+    return sum(
+        leg.qty * intrinsic(leg.key.right, leg.key.strike, spot) * leg.multiplier for leg in legs
+    )
 
 
 def max_loss(legs: Sequence[Leg], net_premium: float) -> float | None:
