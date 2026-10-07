@@ -1,5 +1,6 @@
 """Shared test helpers."""
 
+import copy
 from datetime import date, datetime
 
 from options_bt.data.chain import ContractKey
@@ -12,6 +13,32 @@ E2 = date(2024, 3, 15)
 T0 = snapshot_ts(date(2024, 1, 2))
 T1 = snapshot_ts(date(2024, 1, 3))
 EXPIRY_TS = snapshot_ts(E1)
+
+PCS = {
+    "name": "pcs_spy_45dte",
+    "underlyings": ["SPY"],
+    "entry": {
+        "schedule": {"weekdays": ["MON", "THU"]},
+        "filters": [
+            {"type": "vix_term_structure", "max_ratio": 1.0},
+            {"type": "iv_rank", "min": 20, "lookback_days": 252},
+        ],
+        "legs": [
+            {"right": "put", "side": "short", "dte": [30, 45], "delta": 0.25},
+            {"right": "put", "side": "long", "ref": 0, "strike_offset": -5},
+        ],
+    },
+    "exits": {"profit_target_pct": 50, "stop_loss_multiple": 2.0, "dte_exit": 21},
+    "sizing": {"max_loss_pct_equity": 2.0},
+    "portfolio_caps": {"max_total_max_loss_pct": 15},
+    "costs": {
+        "commission_per_contract": 0.65,
+        "fill_fraction": {1: 0.75, 2: 0.66, 3: 0.56, 4: 0.53},
+    },
+}
+
+PCS_NO_FILTERS = copy.deepcopy(PCS)
+PCS_NO_FILTERS["entry"]["filters"] = []
 
 
 def expiry_ts(d: date) -> datetime:
