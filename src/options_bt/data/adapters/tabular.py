@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 
 _SHARED = ("underlying", "underlying_price", "expiration", "strike")
 _PER_RIGHT = ("bid", "ask", "delta", "iv")
+_SIDE_REQUIRED = ("bid", "ask", "delta")
 _REQUIRED = (*_SHARED, "right", "bid", "ask", "delta", "style", "settlement", "multiplier")
 
 
@@ -47,6 +48,13 @@ class Mapping(BaseModel):
                 raise ValueError("wide layout needs both 'call' and 'put' sub-mappings")
             _reject_unknown("call", self.call, set(_PER_RIGHT))
             _reject_unknown("put", self.put, set(_PER_RIGHT))
+            for side_name, side in (("call", self.call), ("put", self.put)):
+                waived = {"delta"} if side_name == "put" and self.put_delta_from_call else set()
+                missing = sorted(set(_SIDE_REQUIRED) - set(side) - waived)
+                if missing:
+                    raise ValueError(f"'{side_name}' mapping is missing required keys {missing}")
+            if self.put_delta_from_call and "delta" not in self.call:
+                raise ValueError("put_delta_from_call needs a 'call.delta' mapping")
         elif self.call is not None or self.put is not None:
             raise ValueError("'call'/'put' sub-mappings are only valid in wide layout")
         return self
@@ -73,14 +81,15 @@ def _read(raw_path: Path, fmt: str) -> pl.DataFrame:
         raise DataError(f"cannot read {fmt} file {raw_path}: {exc}") from exc
 
 
-def _to_date(frame: pl.DataFrame, source: str, fmt: str | None, raw_path: Path) -> pl.Series:
-    col = frame[source]
+def _to_date(col: pl.Series, label: str, fmt: str | None, raw_path: Path) -> pl.Series:
+    if col.null_count():
+        raise DataError(f"{col.null_count()} null values in column '{label}' of {raw_path}")
     try:
         if col.dtype == pl.Utf8:
             return col.str.strip_chars().str.to_date(fmt, strict=True)
         return col.cast(pl.Date, strict=True)
     except pl.exceptions.PolarsError as exc:
-        raise DataError(f"cannot parse date column '{source}' in {raw_path}: {exc}") from exc
+        raise DataError(f"cannot parse date column '{label}' in {raw_path}: {exc}") from exc
 
 
 def _pick(frame: pl.DataFrame, source: dict[str, str], raw_path: Path, prefix: str = "") -> dict:
@@ -113,20 +122,44 @@ def _long_rows(frame: pl.DataFrame, m: Mapping, raw_path: Path) -> pl.DataFrame:
     return pl.DataFrame(picked)
 
 
+def _floats(side: dict[str, pl.Series], sources: dict[str, str], prefix: str, raw_path: Path):
+    out = {}
+    for canonical, col in side.items():
+        try:
+            out[canonical] = col.cast(pl.Float64, strict=True)
+        except pl.exceptions.PolarsError as exc:
+            raise DataError(
+                f"cannot read column '{sources[canonical]}' (canonical '{prefix}{canonical}') "
+                f"of {raw_path} as numbers: {exc}"
+            ) from exc
+    return out
+
+
 def _wide_rows(frame: pl.DataFrame, m: Mapping, raw_path: Path) -> pl.DataFrame:
     shared = _pick(frame, m.columns, raw_path)
-    call = _pick(frame, m.call, raw_path, "call.")
+    call = _floats(_pick(frame, m.call, raw_path, "call."), m.call, "call.", raw_path)
     put_map = {k: v for k, v in m.put.items() if not (k == "delta" and m.put_delta_from_call)}
-    put = _pick(frame, put_map, raw_path, "put.")
+    put = _floats(
+        _pick(
+            frame,
+            put_map,
+            raw_path,
+            "put.",
+        ),
+        put_map,
+        "put.",
+        raw_path,
+    )
     if m.put_delta_from_call:
-        if "delta" not in call:
-            raise DataError("put_delta_from_call needs a call.delta mapping")
-        put["delta"] = call["delta"].cast(pl.Float64) - 1.0
+        put["delta"] = call["delta"] - 1.0
     sides = [
         pl.DataFrame({**shared, **side}).with_columns(right=pl.lit(right))
         for right, side in (("C", call), ("P", put))
     ]
-    return pl.concat(sides, how="diagonal")
+    try:
+        return pl.concat(sides, how="diagonal")
+    except pl.exceptions.PolarsError as exc:
+        raise DataError(f"cannot combine call and put columns of {raw_path}: {exc}") from exc
 
 
 def convert(raw_path: Path, mapping_path: Path, data_root: Path) -> ImportSummary:
@@ -142,12 +175,13 @@ def convert(raw_path: Path, mapping_path: Path, data_root: Path) -> ImportSummar
         raise DataError(f"date column '{mapping.date_column}' not found in {raw_path}")
 
     rows = (_long_rows if mapping.layout == "long" else _wide_rows)(frame, mapping, raw_path)
-    days = _to_date(frame, mapping.date_column, mapping.date_format, raw_path)
+    days = _to_date(frame[mapping.date_column], mapping.date_column, mapping.date_format, raw_path)
     if mapping.layout == "wide":
         days = pl.concat([days, days])
     rows = rows.with_columns(day=days)
     if "expiration" in rows.columns:
-        expiry = _to_date(rows, "expiration", mapping.date_format, raw_path)
+        label = mapping.columns["expiration"]
+        expiry = _to_date(rows["expiration"], label, mapping.date_format, raw_path)
         rows = rows.with_columns(expiry.alias("expiration"))
 
     unique_days = rows["day"].unique().to_list()

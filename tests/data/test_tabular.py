@@ -95,7 +95,7 @@ def test_canonical_column_absent_from_mapping_names_it(tmp_path):
 def test_unexpected_right_values_listed(tmp_path):
     mapping = tmp_path / "m.yaml"
     mapping.write_text((SAMPLES / "long_mapping.yaml").read_text().replace("P: put", "P: PUT"))
-    with pytest.raises(DataError, match="put"):
+    with pytest.raises(DataError, match="'put'"):
         convert(SAMPLES / "long_sample.csv", mapping, tmp_path / "data")
 
 
@@ -163,3 +163,59 @@ def test_cli_import_tabular(tmp_path, capsys):
     )
     assert code == 0
     assert "wrote 4 rows" in capsys.readouterr().out
+
+
+def _wide_mapping_text(**replacements):
+    text = (SAMPLES / "wide_mapping.yaml").read_text()
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+
+def test_wide_put_delta_required_unless_derived(tmp_path):
+    mapping = tmp_path / "m.yaml"
+    mapping.write_text(
+        _wide_mapping_text(**{"put_delta_from_call: true": "put_delta_from_call: false"})
+    )
+    with pytest.raises(ConfigError, match="delta"):
+        load_mapping(mapping)
+
+
+def test_wide_requires_bid_ask_on_both_sides(tmp_path):
+    mapping = tmp_path / "m.yaml"
+    mapping.write_text(_wide_mapping_text(**{"  bid: pBidPx\n": ""}))
+    with pytest.raises(ConfigError, match="put.*bid"):
+        load_mapping(mapping)
+
+
+def test_wide_integral_bid_on_one_side_is_cast(tmp_path):
+    raw = tmp_path / "wide.csv"
+    raw.write_text(
+        "trade_date,ticker,stkPx,expirDate,strike,cBidPx,cAskPx,cMidIv,pBidPx,pAskPx,pMidIv,delta\n"
+        "2024-01-02,SPY,470.5,2024-01-19,470,5,6,0.18,4.9,5.1,0.19,1\n"
+    )
+    convert(raw, SAMPLES / "wide_mapping.yaml", tmp_path / "data")
+    c = _first_chain(tmp_path / "data")
+    assert c.filter(pl.col("right") == "C")["bid"][0] == 5.0
+    assert c.filter(pl.col("right") == "P")["delta"][0] == 0.0
+
+
+def test_wide_non_numeric_column_names_it(tmp_path):
+    raw = tmp_path / "wide.csv"
+    raw.write_text(
+        "trade_date,ticker,stkPx,expirDate,strike,cBidPx,cAskPx,cMidIv,pBidPx,pAskPx,pMidIv,delta\n"
+        "2024-01-02,SPY,470.5,2024-01-19,470,abc,6,0.18,4.9,5.1,0.19,0.5\n"
+    )
+    with pytest.raises(DataError, match="cBidPx"):
+        convert(raw, SAMPLES / "wide_mapping.yaml", tmp_path / "data")
+
+
+@pytest.mark.parametrize("bad_column", ["Date", "Expiry"])
+def test_null_date_or_expiration_is_data_error(tmp_path, bad_column):
+    lines = (SAMPLES / "long_sample.csv").read_text().splitlines()
+    first = lines[1].split(",")
+    first[0 if bad_column == "Date" else 3] = ""
+    raw = tmp_path / "long.csv"
+    raw.write_text("\n".join([lines[0], ",".join(first), *lines[2:]]) + "\n")
+    with pytest.raises(DataError, match=f"1 null values in column '{bad_column}'"):
+        convert(raw, SAMPLES / "long_mapping.yaml", tmp_path / "data")
