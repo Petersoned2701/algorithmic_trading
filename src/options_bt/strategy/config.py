@@ -79,28 +79,39 @@ class EntryConfig(_Model):
 
 
 class ExitConfig(_Model):
-    profit_target_pct: float | None = None
-    stop_loss_multiple: float | None = None
-    dte_exit: int | None = None
+    profit_target_pct: float | None = Field(default=None, gt=0)
+    stop_loss_multiple: float | None = Field(default=None, gt=0)
+    dte_exit: int | None = Field(default=None, ge=0)
 
 
 class SizingConfig(_Model):
-    max_loss_pct_equity: float
+    max_loss_pct_equity: float = Field(gt=0, le=100)
 
 
 class PortfolioCaps(_Model):
-    max_total_max_loss_pct: float = 100.0
+    max_total_max_loss_pct: float = Field(default=100.0, gt=0, le=100)
 
 
 class CostConfig(_Model):
-    commission_per_contract: float = 0.65
-    per_order_fee: float = 0.0
+    commission_per_contract: float = Field(default=0.65, ge=0)
+    per_order_fee: float = Field(default=0.0, ge=0)
     fill_fraction: dict[int, float] = Field(default_factory=lambda: dict(DEFAULT_FILL_FRACTION))
-    fill_fraction_override: float | None = None
+    fill_fraction_override: float | None = Field(default=None, ge=0, le=1)
+
+    @field_validator("fill_fraction")
+    @classmethod
+    def _fill_fractions_in_range(cls, value):
+        if not value:
+            raise ValueError("fill_fraction must not be empty")
+        if any(legs < 1 for legs in value):
+            raise ValueError("fill_fraction keys are leg counts and must be >= 1")
+        if any(not 0 <= fraction <= 1 for fraction in value.values()):
+            raise ValueError("fill_fraction values must be between 0 and 1")
+        return value
 
 
 class AccountConfig(_Model):
-    initial_cash: float = 15000.0
+    initial_cash: float = Field(default=15000.0, gt=0)
     cash_interest: bool = False
     session_close: time = time(15, 45)
 
@@ -123,7 +134,7 @@ class AccountConfig(_Model):
 
 class StrategyConfig(_Model):
     name: str
-    underlyings: list[str]
+    underlyings: list[str] = Field(min_length=1)
     entry: EntryConfig
     exits: ExitConfig = ExitConfig()
     sizing: SizingConfig

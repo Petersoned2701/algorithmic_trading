@@ -425,6 +425,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "matplotlib" },
+    { name = "numpy" },
     { name = "polars" },
     { name = "pyarrow" },
     { name = "pydantic" },
@@ -441,6 +442,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "matplotlib" },
+    { name = "numpy" },
     { name = "polars" },
     { name = "pyarrow" },
     { name = "pydantic", specifier = ">=2" },

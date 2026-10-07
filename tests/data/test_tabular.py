@@ -232,3 +232,12 @@ def test_second_tabular_import_needs_replace_and_new_values_win(tmp_path):
     call = chain.filter((pl.col("right") == "C") & (pl.col("strike") == 470.0)).row(0, named=True)
     assert s.rows_written == 4 and chain.height == 4
     assert (call["bid"], call["ask"]) == (5.0, 5.4)
+
+
+@pytest.mark.parametrize("name", ["dubach", "orats"])
+def test_shipped_mapping_loads_and_defaults_pass_validation(name):
+    from options_bt.data.schema import VALID_SETTLEMENTS, VALID_STYLES
+
+    mapping = load_mapping(Path("configs/mappings") / f"{name}.yaml")
+    assert mapping.defaults["settlement"] in VALID_SETTLEMENTS
+    assert mapping.defaults["style"] in VALID_STYLES

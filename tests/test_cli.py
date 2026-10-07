@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from options_bt.cli import main
+from options_bt.strategy.config import load_raw, parse_config
 
 
 @pytest.fixture
@@ -29,6 +30,7 @@ def test_end_to_end_demo(tmp_path, demo_root, capsys):
     assert report.startswith("# demo_pcs_synthetic")
     assert "## Go/no-go" in report and "In-sample" in report
     assert "INFO" in (run_dir / "run.log").read_text()
+    assert len((run_dir / "trades.csv").read_text().splitlines()) >= 2
     out = capsys.readouterr().out
     assert out.splitlines()[0] == str(run_dir)
     assert "max_drawdown" in out and "robustness" in out
@@ -78,3 +80,8 @@ def test_import_twice_needs_replace_flag(demo_root, capsys):
     assert main(args) == 2
     assert "--replace" in capsys.readouterr().err
     assert main([*args, "--replace"]) == 0
+
+
+def test_shipped_pcs_spy_config_parses():
+    config = parse_config(load_raw(Path("configs/pcs_spy_45dte.yaml")))
+    assert config.name == "pcs_spy_45dte" and config.underlyings == ["SPY"]

@@ -189,3 +189,60 @@ def test_quoted_session_close_parses():
 def test_tz_aware_session_close_rejected():
     with pytest.raises(ConfigError, match="session_close"):
         parse_config(_with_account('session_close: "15:45:00+00:00"'))
+
+
+@pytest.mark.parametrize(
+    "path, value",
+    [
+        (["sizing", "max_loss_pct_equity"], 0),
+        (["sizing", "max_loss_pct_equity"], -1),
+        (["sizing", "max_loss_pct_equity"], 101),
+        (["portfolio_caps", "max_total_max_loss_pct"], 0),
+        (["portfolio_caps", "max_total_max_loss_pct"], 100.5),
+        (["exits", "profit_target_pct"], 0),
+        (["exits", "profit_target_pct"], -50),
+        (["exits", "stop_loss_multiple"], 0),
+        (["exits", "stop_loss_multiple"], -2),
+        (["exits", "dte_exit"], -1),
+        (["underlyings"], []),
+        (["costs", "fill_fraction"], {}),
+        (["costs", "fill_fraction"], {0: 0.5}),
+        (["costs", "fill_fraction"], {1: 1.5}),
+        (["costs", "fill_fraction"], {1: -0.1}),
+        (["costs", "fill_fraction_override"], 1.2),
+        (["costs", "fill_fraction_override"], -0.1),
+        (["costs", "commission_per_contract"], -0.65),
+        (["costs", "per_order_fee"], -1),
+        (["account", "initial_cash"], 0),
+        (["account", "initial_cash"], -100),
+    ],
+)
+def test_out_of_range_values_are_rejected(path, value):
+    raw = copy.deepcopy(PCS)
+    target = raw
+    for key in path[:-1]:
+        target = target.setdefault(key, {})
+    target[path[-1]] = value
+    with pytest.raises(ConfigError, match=path[-1]):
+        parse_config(raw)
+
+
+@pytest.mark.parametrize(
+    "path, value",
+    [
+        (["sizing", "max_loss_pct_equity"], 100),
+        (["portfolio_caps", "max_total_max_loss_pct"], 100),
+        (["exits", "dte_exit"], 0),
+        (["costs", "fill_fraction_override"], 0),
+        (["costs", "fill_fraction_override"], 1),
+        (["costs", "commission_per_contract"], 0),
+        (["costs", "fill_fraction"], {1: 1.0, 2: 0.0}),
+    ],
+)
+def test_boundary_values_are_accepted(path, value):
+    raw = copy.deepcopy(PCS)
+    target = raw
+    for key in path[:-1]:
+        target = target.setdefault(key, {})
+    target[path[-1]] = value
+    parse_config(raw)
