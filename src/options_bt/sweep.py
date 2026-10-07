@@ -2,6 +2,7 @@
 
 import copy
 import itertools
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,8 @@ def _find_axes(node: Any, path: tuple[str, ...], axes: dict[tuple[str, ...], lis
         if set(node) == {"sweep"}:
             values = node["sweep"]
             dotted = ".".join(path)
+            if not path:
+                raise ConfigError("a sweep marker cannot be the whole config")
             if not isinstance(values, list) or not values:
                 raise ConfigError(f"sweep at '{dotted}' must be a non-empty list")
             axes[path] = values
@@ -89,6 +92,10 @@ def robustness(rows: list[dict], grid: dict[str, list]) -> float | None:
     return sum(1 for row in neighbours if row["net_return"] > 0) / len(neighbours)
 
 
+def _scalar(value: Any) -> Any:
+    return json.dumps(value) if isinstance(value, list | dict) else value
+
+
 def run_sweep(
     raw: dict, store: QuoteStore, market: MarketData, out_dir: Path, start=None, end=None
 ) -> pl.DataFrame:
@@ -103,7 +110,10 @@ def run_sweep(
         result = run(config, store, market, start=start, end=end)
         metrics = compute_metrics(result.equity, result.trades, result.stats, store.dropped_rows())
         rows.append({**params, **{key: metrics[key] for key in _METRIC_COLUMNS}})
-    frame = pl.DataFrame(rows, infer_schema_length=None)
+    frame = pl.DataFrame(
+        [{**row, **{axis: _scalar(row[axis]) for axis in grid}} for row in rows],
+        infer_schema_length=None,
+    )
     out_dir.mkdir(parents=True, exist_ok=True)
     frame.write_parquet(out_dir / "sweep_results.parquet")
     frame.write_csv(out_dir / "sweep_results.csv")

@@ -140,3 +140,18 @@ def test_run_sweep_invalid_combination_fails_fast_naming_params(tmp_path, make_s
     store = QuoteStore(make_store({"SPY": [100.0] * 20}))
     with pytest.raises(ConfigError, match=r"exits.profit_target_pct.*bad"):
         run_sweep(raw, store, MarketData({}), tmp_path)
+
+
+def test_expand_root_marker_is_config_error():
+    with pytest.raises(ConfigError, match="whole config"):
+        expand({"sweep": [1, 2]})
+
+
+def test_run_sweep_list_valued_axis_written_as_json(tmp_path, make_store):
+    raw = sweepable_pcs(profit=[50])
+    raw["entry"]["legs"][0]["dte"] = {"sweep": [[30, 45], [20, 30]]}
+    store = QuoteStore(make_store({"SPY": [100.0] * 20}))
+    df = run_sweep(raw, store, MarketData({}), tmp_path)
+    assert df["entry.legs.0.dte"].to_list() == ["[30, 45]", "[20, 30]"]
+    assert pl.read_parquet(tmp_path / "sweep_results.parquet").height == 2
+    assert (tmp_path / "sweep_results.csv").exists()
