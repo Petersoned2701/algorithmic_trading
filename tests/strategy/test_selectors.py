@@ -139,3 +139,26 @@ def test_ref_strike_not_listed_raises():
     ]
     with pytest.raises(NoContractFound, match="leg 1"):
         select_legs(chain, specs, TS)
+
+
+def test_all_null_delta_raises_no_contract_found():
+    chain = _chain(
+        [
+            (date(2024, 1, 12), 100.0, "P", None),
+            (date(2024, 1, 12), 95.0, "P", float("nan")),
+        ]
+    )
+    spec = LegSpec(right="P", side="short", dte=(10, 14), delta=0.25)
+    with pytest.raises(NoContractFound, match="delta"):
+        select_legs(chain, [spec], TS)
+
+
+def test_null_delta_rows_are_ignored_when_others_remain():
+    chain = _chain(
+        [
+            (date(2024, 1, 12), 100.0, "P", None),
+            (date(2024, 1, 12), 95.0, "P", -0.3),
+        ]
+    )
+    spec = LegSpec(right="P", side="short", dte=(10, 14), delta=0.25)
+    assert select_legs(chain, [spec], TS)[0].key.strike == 95.0

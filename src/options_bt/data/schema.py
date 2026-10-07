@@ -26,6 +26,10 @@ QUOTE_SCHEMA: dict[str, pl.DataType] = {
     "multiplier": pl.Int32,
 }
 
+VALID_RIGHTS = ["C", "P"]
+VALID_STYLES = ["american", "european"]
+VALID_SETTLEMENTS = ["physical", "cash"]
+
 KEY_COLUMNS = ["ts", "underlying", "expiration", "strike", "right"]
 
 
@@ -43,8 +47,22 @@ def validate(df: pl.DataFrame) -> tuple[pl.DataFrame, int]:
             raise DataError(f"cannot cast column '{name}' to {dtype}: {exc}") from exc
     out = pl.DataFrame(casts)
 
-    bad = (pl.col("bid") < 0) | (pl.col("ask") <= 0) | (pl.col("bid") > pl.col("ask"))
-    out = out.filter(~bad.fill_null(True))
+    good = (
+        pl.col("bid").is_finite()
+        & pl.col("ask").is_finite()
+        & (pl.col("bid") >= 0)
+        & (pl.col("ask") > 0)
+        & (pl.col("bid") <= pl.col("ask"))
+        & (pl.col("strike") > 0)
+        & (pl.col("underlying_price") > 0)
+        & (pl.col("multiplier") > 0)
+        & pl.col("ts").is_not_null()
+        & pl.col("expiration").is_not_null()
+        & pl.col("right").is_in(VALID_RIGHTS)
+        & pl.col("style").is_in(VALID_STYLES)
+        & pl.col("settlement").is_in(VALID_SETTLEMENTS)
+    )
+    out = out.filter(good.fill_null(False))
     out = out.unique(subset=KEY_COLUMNS, keep="last", maintain_order=True)
 
     dropped = df.height - out.height

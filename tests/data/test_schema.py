@@ -17,7 +17,7 @@ def _rows(**overrides) -> pl.DataFrame:
         "strike": [490.0, 495.0, 500.0],
         "right": ["P", "P", "P"],
         "style": ["european"] * 3,
-        "settlement": ["pm"] * 3,
+        "settlement": ["physical"] * 3,
         "bid": [1.0, 1.5, 2.0],
         "ask": [1.2, 1.7, 2.2],
         "delta": [-0.2, -0.3, -0.4],
@@ -64,6 +64,42 @@ def test_zero_ask_dropped():
 def test_null_quote_dropped():
     out, dropped = validate(_rows(bid=[None, 0.9, 0.9], ask=[1.0, 1.0, 1.0]))
     assert out.height == 2 and dropped == 1
+
+
+@pytest.mark.parametrize(
+    "column, value",
+    [
+        ("bid", float("nan")),
+        ("ask", float("inf")),
+        ("bid", float("-inf")),
+        ("strike", None),
+        ("strike", 0.0),
+        ("strike", -5.0),
+        ("underlying_price", None),
+        ("underlying_price", 0.0),
+        ("multiplier", None),
+        ("multiplier", 0),
+        ("ts", None),
+        ("expiration", None),
+        ("right", None),
+        ("right", "X"),
+        ("style", "asian"),
+        ("style", None),
+        ("settlement", "pm"),
+        ("settlement", None),
+    ],
+)
+def test_invalid_row_is_dropped_and_counted(column, value):
+    base = _rows()
+    values = base[column].to_list()
+    values[0] = value
+    out, dropped = validate(base.with_columns(pl.Series(column, values, dtype=base[column].dtype)))
+    assert dropped == 1 and out.height == 2
+
+
+def test_null_delta_and_iv_rows_are_kept():
+    out, dropped = validate(_rows(delta=[None, float("nan"), -0.4], iv=[None, None, None]))
+    assert dropped == 0 and out.height == 3
 
 
 def test_dropped_rows_are_logged_as_warning(caplog):

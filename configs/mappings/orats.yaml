@@ -25,6 +25,6 @@ put:
 put_delta_from_call: true
 defaults:
   style: american
-  settlement: PM
+  settlement: physical
   multiplier: 100
 verified: false

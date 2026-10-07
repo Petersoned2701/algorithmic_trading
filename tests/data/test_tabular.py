@@ -62,7 +62,7 @@ def test_wide_layout_explicit_put_delta(tmp_path):
         "format: csv\nlayout: wide\ndate_column: d\ndate_format: null\n"
         "columns: {underlying: u, underlying_price: px, expiration: e, strike: k}\n"
         "call: {bid: cb, ask: ca, delta: cd}\nput: {bid: pb, ask: pa, delta: pd}\n"
-        "defaults: {style: european, settlement: AM, multiplier: 100}\n"
+        "defaults: {style: european, settlement: cash, multiplier: 100}\n"
     )
     convert(raw, mapping, tmp_path / "data")
     c = _first_chain(tmp_path / "data")

@@ -17,6 +17,6 @@ right_values:
   P: put
 defaults:
   style: american
-  settlement: PM
+  settlement: physical
   multiplier: 100
 verified: true

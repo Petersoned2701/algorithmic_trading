@@ -61,7 +61,11 @@ def _pick_expiration(chain: pl.DataFrame, dte: tuple[int, int], today: date) -> 
 
 
 def _pick_by_delta(rows: pl.DataFrame, target: float, right: str) -> dict:
-    strikes = rows.sort("strike", descending=right == "C")
+    strikes = rows.filter(pl.col("delta").is_not_null() & pl.col("delta").is_finite()).sort(
+        "strike", descending=right == "C"
+    )
+    if strikes.is_empty():
+        raise NoContractFound("no quotes with a usable delta")
     deltas = strikes.select(err=(pl.col("delta").abs() - target).abs().round(9))["err"]
     # Descending for calls puts the higher (further OTM) strike first, so
     # arg_min's first-wins tie-break is always the more conservative strike.
