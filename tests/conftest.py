@@ -1,3 +1,4 @@
+import copy
 import logging
 from collections.abc import Callable
 from datetime import date, timedelta
@@ -11,6 +12,7 @@ from options_bt.data.history import History
 from options_bt.data.market import MarketData
 from options_bt.data.schema import NEW_YORK, snapshot_ts, validate
 from options_bt.data.store import QuoteStore, write_quotes
+from options_bt.engine.loop import RunResult, run
 from options_bt.engine.portfolio import Portfolio
 from options_bt.engine.position import max_loss
 from options_bt.execution.fills import FillModel
@@ -112,3 +114,13 @@ def ctx_factory(make_store) -> Callable[..., StepContext]:
         )
 
     return _make
+
+
+@pytest.fixture
+def small_result(make_store) -> RunResult:
+    raw = copy.deepcopy(PCS_NO_FILTERS)
+    raw["entry"]["schedule"] = {}
+    raw["entry"]["max_open_positions"] = 1
+    raw["account"] = {"initial_cash": 100_000}
+    root = make_store({"SPY": [100.0] * 10})
+    return run(parse_config(raw), QuoteStore(root), MarketData({}))
