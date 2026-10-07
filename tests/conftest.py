@@ -11,8 +11,13 @@ from options_bt.data.history import History
 from options_bt.data.market import MarketData
 from options_bt.data.schema import NEW_YORK, snapshot_ts, validate
 from options_bt.data.store import QuoteStore, write_quotes
+from options_bt.engine.portfolio import Portfolio
+from options_bt.engine.position import max_loss
 from options_bt.execution.fills import FillModel
 from options_bt.strategy.base import RunStats, StepContext
+from options_bt.strategy.config import parse_config
+from options_bt.strategy.selectors import select_legs
+from tests.helpers import PCS_NO_FILTERS
 
 
 @pytest.fixture(autouse=True)
@@ -54,7 +59,12 @@ def spy_chain() -> pl.DataFrame:
 @pytest.fixture
 def ctx_factory(make_store) -> Callable[..., StepContext]:
     def _make(
-        on: date | None = None, *, vix: float = 15.0, vix3m: float = 17.0, days: int | None = None
+        on: date | None = None,
+        *,
+        vix: float = 15.0,
+        vix3m: float = 17.0,
+        days: int | None = None,
+        open_pcs_with_credit: float | None = None,
     ) -> StepContext:
         start = date(2024, 1, 2)
         if days is None:
@@ -72,10 +82,28 @@ def ctx_factory(make_store) -> Callable[..., StepContext]:
             name: pl.DataFrame({"date": [start], "value": [value]})
             for name, value in (("vix", vix), ("vix3m", vix3m))
         }
+        chain = store.chain("SPY", ts)
+        positions = {}
+        if open_pcs_with_credit is not None:
+            legs = select_legs(chain, parse_config(PCS_NO_FILTERS).entry.legs, ts)
+            short, long = legs
+            short.entry_price = open_pcs_with_credit + 0.10
+            long.entry_price = 0.10
+            portfolio = Portfolio(100_000.0)
+            portfolio.open(
+                "SPY",
+                legs,
+                1,
+                ts,
+                0.0,
+                max_loss(legs, open_pcs_with_credit * 100),
+                {"strategy": PCS_NO_FILTERS["name"]},
+            )
+            positions = portfolio.positions
         return StepContext(
             ts=ts,
-            chains={"SPY": store.chain("SPY", ts)},
-            positions={},
+            chains={"SPY": chain},
+            positions=positions,
             equity=100_000.0,
             market=MarketData(series),
             history=History(store, ts),
