@@ -10,9 +10,9 @@ from options_bt.analytics.criteria import evaluate, load_criteria
 from options_bt.analytics.metrics import compute_metrics
 from options_bt.analytics.periods import load_periods, split_metrics, stress_table
 from options_bt.analytics.report import checks_table, make_run_dir, provenance, write_outputs
-from options_bt.data.adapters import synthetic
+from options_bt.data.adapters import synthetic, tabular
 from options_bt.data.market import MarketData
-from options_bt.data.store import QuoteStore
+from options_bt.data.store import ImportSummary, QuoteStore
 from options_bt.engine.loop import run
 from options_bt.errors import BacktestError
 from options_bt.logging_setup import configure
@@ -52,6 +52,11 @@ def _build_parser() -> argparse.ArgumentParser:
     synthetic_cmd.add_argument("raw", type=Path, help="CSV with date,underlying,close")
     synthetic_cmd.add_argument("--data-root", type=Path, required=True)
     synthetic_cmd.set_defaults(handler=_import_synthetic)
+    tabular_cmd = sources.add_parser("tabular", help="convert a vendor CSV/Parquet via a mapping")
+    tabular_cmd.add_argument("raw", type=Path, help="vendor CSV or Parquet file")
+    tabular_cmd.add_argument("--mapping", type=Path, required=True)
+    tabular_cmd.add_argument("--data-root", type=Path, required=True)
+    tabular_cmd.set_defaults(handler=_import_tabular)
     return parser
 
 
@@ -103,10 +108,17 @@ def _sweep(args: argparse.Namespace) -> int:
 
 
 def _import_synthetic(args: argparse.Namespace) -> int:
-    summary = synthetic.convert(args.raw, args.data_root)
+    return _print_summary(synthetic.convert(args.raw, args.data_root), args.data_root)
+
+
+def _import_tabular(args: argparse.Namespace) -> int:
+    return _print_summary(tabular.convert(args.raw, args.mapping, args.data_root), args.data_root)
+
+
+def _print_summary(summary: ImportSummary, data_root: Path) -> int:
     print(
         f"wrote {summary.rows_written} rows ({summary.rows_dropped} dropped) "
-        f"in {summary.partitions} partitions under {args.data_root}"
+        f"in {summary.partitions} partitions under {data_root}"
     )
     return 0
 

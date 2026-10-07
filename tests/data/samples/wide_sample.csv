@@ -1,0 +1,3 @@
+trade_date,ticker,stkPx,expirDate,strike,cBidPx,cAskPx,cMidIv,pBidPx,pAskPx,pMidIv,delta
+2024-01-02,SPY,470.5,2024-01-19,470,5.1,5.3,0.18,4.9,5.1,0.19,0.4
+2024-01-02,SPY,470.5,2024-01-19,475,2.9,3.1,0.17,6.9,7.1,0.18,0.3
