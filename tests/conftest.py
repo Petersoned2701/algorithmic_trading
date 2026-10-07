@@ -7,6 +7,7 @@ import polars as pl
 import pytest
 
 from options_bt.data.adapters.synthetic import generate_chains
+from options_bt.data.schema import validate
 from options_bt.data.store import write_quotes
 
 
@@ -37,3 +38,10 @@ def make_store(tmp_path: Path) -> Callable[..., Path]:
         return tmp_path
 
     return _make
+
+
+@pytest.fixture
+def spy_chain() -> pl.DataFrame:
+    raw = generate_chains("SPY", [(date(2024, 1, 2), 100.0)])
+    chain, _ = validate(raw)
+    return chain
