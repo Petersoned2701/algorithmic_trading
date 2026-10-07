@@ -1,7 +1,9 @@
 """Shared test helpers."""
 
 import copy
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+
+import polars as pl
 
 from options_bt.data.chain import ContractKey
 from options_bt.data.schema import snapshot_ts
@@ -67,3 +69,20 @@ def L(
 
 TS_DATE = date(2024, 1, 2)
 TS = snapshot_ts(TS_DATE)
+
+
+def eq(values, start: date = date(2024, 1, 2), tbill: float | None = None) -> pl.DataFrame:
+    """Equity frame on consecutive Mon-Fri dates from `start` (ts, equity, tbill only)."""
+    days: list[date] = []
+    d = start
+    while len(days) < len(values):
+        if d.weekday() < 5:
+            days.append(d)
+        d += timedelta(days=1)
+    return pl.DataFrame(
+        {
+            "ts": [snapshot_ts(x) for x in days],
+            "equity": pl.Series(list(values), dtype=pl.Float64),
+            "tbill": pl.Series([tbill] * len(days), dtype=pl.Float64),
+        }
+    )
