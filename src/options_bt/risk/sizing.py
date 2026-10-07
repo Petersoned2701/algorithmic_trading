@@ -4,6 +4,10 @@ import math
 log = logging.getLogger(__name__)
 
 
+def _units(budget: float, requirement: float) -> int:
+    return math.floor(budget / requirement + 1e-9)
+
+
 def size(
     requirement_per_unit: float | None,
     *,
@@ -20,16 +24,16 @@ def size(
         log.debug("non-positive requirement %s; refusing to size", requirement_per_unit)
         return 0, "size_zero"
 
-    qty = math.floor(max_loss_pct_equity / 100 * equity / requirement_per_unit)
+    qty = _units(max_loss_pct_equity / 100 * equity, requirement_per_unit)
     if qty <= 0:
         return 0, "size_zero"
 
     room = max_total_max_loss_pct / 100 * equity - current_requirement
-    qty = min(qty, math.floor(room / requirement_per_unit))
+    qty = min(qty, _units(room, requirement_per_unit))
     if qty <= 0:
         return 0, "portfolio_cap"
 
-    qty = min(qty, math.floor(cash / requirement_per_unit))
+    qty = min(qty, _units(cash, requirement_per_unit))
     if qty <= 0:
         return 0, "insufficient_cash"
     return qty, None

@@ -99,3 +99,7 @@ def test_non_positive_requirement_is_size_zero(req, caplog):
     with caplog.at_level(logging.DEBUG, logger="options_bt.risk.sizing"):
         assert _size(req) == (0, "size_zero")
     assert any(r.levelno == logging.DEBUG for r in caplog.records)
+
+
+def test_exact_boundary_is_not_undersized_by_float_error():
+    assert _size(350.0, equity=50_000, cash=50_000, max_loss_pct_equity=0.7) == (1, None)
