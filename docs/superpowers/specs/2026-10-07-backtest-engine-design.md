@@ -53,8 +53,7 @@ src/options_bt/
     market.py          # auxiliary daily series: T-bill rate, VIX, VIX3M
     adapters/
       synthetic.py     # Black-Scholes chain generator (tests + demo)
-      dubach.py        # free SPY/QQQ/IWM dataset converter
-      orats.py         # ORATS Near-EOD converter
+      tabular.py       # mapping-driven CSV/Parquet importer (free dataset, ORATS, ...)
   strategy/
     base.py            # Strategy protocol, StepContext, Order
     config.py          # pydantic models for strategy YAML
@@ -81,6 +80,8 @@ src/options_bt/
   sweep.py             # expand parameter grid, run, compare
   cli.py               # options-bt run | sweep | data import
 configs/               # strategy YAMLs, criteria.yaml, stress_periods.yaml, events.csv
+  mappings/            # one column-mapping YAML per data source (dubach.yaml, orats.yaml)
+examples/              # small committed price paths + market CSVs for the synthetic demo
 tests/                 # mirrors src/; fixtures/ holds small synthetic Parquet
 ```
 
@@ -100,7 +101,8 @@ Each module has one job and can be tested on its own. The engine depends on the 
 | `style` | str | `american` or `european` |
 | `settlement` | str | `physical` or `cash` |
 | `bid`, `ask` | f64 | NBBO at `ts` |
-| `delta`, `iv` | f64, nullable | Taken from the vendor if provided; otherwise the converter computes them |
+| `delta` | f64 | Required. Taken from the vendor (or computed by the synthetic generator). Sources without greeks are rejected with a `DataError`; an IV solver is deferred. |
+| `iv` | f64, nullable | Taken from the vendor when present |
 | `multiplier` | i32 | Default 100 |
 
 The date is derived from `ts` and never stored separately.
@@ -122,7 +124,7 @@ A missing chain for a timestamp the store lists raises `DataError`. Market holid
 ### Converters
 Each converter is a function `convert(raw_path, data_root) -> ImportSummary`. It maps the source's columns to the canonical schema, validates, and writes the partitions.
 - `synthetic` generates chains from a given underlying price path, constant IV and a bid-ask width rule. It drives tests and the demo.
-- `dubach` and `orats` are written against each source's documented columns. Their tests use small hand-made sample files with those columns. The `dubach` column mapping must be confirmed against a real sample file before relying on it.
+- `tabular` is one importer driven by a mapping YAML (`configs/mappings/<source>.yaml`) that renames columns, maps call/put values, sets defaults (style, settlement, multiplier, snapshot time), and handles both long (one row per contract) and wide (call and put columns on one row) layouts. Adding a source means adding a mapping file, not code. The `dubach` and `orats` mappings are written from documentation and are marked unverified until checked against a real sample file.
 
 ## 5. Engine
 
@@ -189,6 +191,7 @@ The config is validated by pydantic models; any validation failure raises `Confi
   - Profit and loss are measured relative to the entry credit (or the debit, for debit structures).
   - DTE is measured in calendar days to the position's earliest expiration.
 - `sizing`, `portfolio_caps`, `costs`, `margin_model` (default `defined_risk`)
+- `account`: `initial_cash` (default 15,000), `cash_interest` (default false; when true, cash accrues the T-bill rate daily), `session_close` (default 15:45 ET)
 
 Exit conditions are evaluated on the **fill-model close price**, not the midpoint.
 
@@ -203,7 +206,7 @@ Initial filters:
 - `event_blackout(file, days_before, days_after)`: dates come from `configs/events.csv`.
 
 ## 7. Sweeps
-Any scalar field in a strategy config may instead be a list. `sweep.py` expands the Cartesian product, runs each combination sequentially (a parallel option is deferred), and writes `sweep_results.parquet/.csv` with one row per combination of parameters and key metrics. It also computes a **neighbour robustness score**: the share of combinations within one grid step of the best combination that are profitable.
+Any scalar field in a strategy config may instead be `{sweep: [v1, v2, ...]}`. (A plain list can't be the marker, because fields such as `dte` and `underlyings` are already lists.) `sweep.py` expands the Cartesian product, runs each combination sequentially (a parallel option is deferred), and writes `sweep_results.parquet/.csv` with one row per combination of parameters and key metrics. It also computes a **neighbour robustness score**: the share of combinations within one grid step of the best combination that are profitable.
 
 ## 8. Analytics and go/no-go criteria
 - **Metrics** (`metrics.json`):
@@ -253,12 +256,13 @@ Each run writes to `runs/<UTC timestamp>_<name>/` (git-ignored):
 ```
 options-bt run <strategy.yaml> --data-root PATH [--start DATE --end DATE] [--oos-start DATE] [-v]
 options-bt sweep <strategy.yaml> --data-root PATH [...]
-options-bt data import {synthetic,dubach,orats} <raw_path> --data-root PATH
+options-bt data import synthetic <price_path.csv> --data-root PATH
+options-bt data import tabular <raw_path> --mapping configs/mappings/<source>.yaml --data-root PATH
 ```
 
 ## 12. Testing
 - **TDD throughout:** every behaviour starts as a failing test.
-- **Synthetic fixtures:** `tests/fixtures/` contains about 2 MB of synthetic Parquet: 3 underlyings × about 120 trading days, plus scenarios (a flat path, a steady rise, and a crash through the short strike).
+- **Synthetic fixtures:** tests build synthetic Parquet stores in a temporary directory from small price paths (flat, steady rise, crash through the short strike), so nothing large is committed. `examples/` holds a committed price-path CSV and market CSVs so the demo runs in a cloud session without downloads.
 - **Unit tests for:**
   - Schema validation
   - Store lookups
