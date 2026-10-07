@@ -92,14 +92,14 @@ def test_ref_leg_may_carry_dte():
 def test_forward_ref_rejected():
     bad = copy.deepcopy(PCS)
     bad["entry"]["legs"][1]["ref"] = 1
-    with pytest.raises(ConfigError):
+    with pytest.raises(ConfigError, match="earlier"):
         parse_config(bad)
 
 
 def test_ref_on_first_leg_rejected():
     bad = copy.deepcopy(PCS)
     bad["entry"]["legs"] = [{"right": "put", "side": "long", "ref": 0, "strike_offset": -5}]
-    with pytest.raises(ConfigError):
+    with pytest.raises(ConfigError, match="earlier"):
         parse_config(bad)
 
 
@@ -168,3 +168,24 @@ def test_run_stats_reject_counts_by_reason():
     stats.reject("cap")
     assert stats.rejections == {"no_contract": 2, "cap": 1}
     assert RunStats().rejections == {}
+
+
+def _with_account(text):
+    raw = copy.deepcopy(PCS)
+    raw["account"] = yaml.safe_load(text)
+    return raw
+
+
+def test_unquoted_session_close_is_rejected():
+    with pytest.raises(ConfigError, match=r"account\.session_close: .*quote"):
+        parse_config(_with_account("session_close: 15:45"))
+
+
+def test_quoted_session_close_parses():
+    cfg = parse_config(_with_account('session_close: "15:45"'))
+    assert cfg.account.session_close == time(15, 45)
+
+
+def test_tz_aware_session_close_rejected():
+    with pytest.raises(ConfigError, match="session_close"):
+        parse_config(_with_account('session_close: "15:45:00+00:00"'))

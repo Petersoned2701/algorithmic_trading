@@ -104,6 +104,22 @@ class AccountConfig(_Model):
     cash_interest: bool = False
     session_close: time = time(15, 45)
 
+    @field_validator("session_close", mode="before")
+    @classmethod
+    def _quote_clock_time(cls, value):
+        if isinstance(value, int):
+            raise ValueError(
+                f'session_close {value} was read as a number; quote the time, e.g. "15:45"'
+            )
+        return value
+
+    @field_validator("session_close")
+    @classmethod
+    def _naive_clock_time(cls, value):
+        if value.tzinfo is not None:
+            raise ValueError("session_close is a New York wall-clock time; omit the UTC offset")
+        return value
+
 
 class StrategyConfig(_Model):
     name: str
