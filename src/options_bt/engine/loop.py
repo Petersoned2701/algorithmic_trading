@@ -123,12 +123,10 @@ class _Run:
         if position is None:
             return
         chain = self.chains.get(position.underlying)
-        prices = (
-            self.fills.prices(chain, position.legs, opening=False) if chain is not None else None
-        )
+        prices = self.fill_prices(chain, position.legs, opening=False)
         if prices is None:
             self.stats.deferred_closes += 1
-            log.debug("close of position %d deferred: no quotes at %s", position.id, ts)
+            log.warning("close of position %d deferred: no quotes at %s", position.id, ts)
             return
         self.add_spread_cost(chain, position.legs, prices, position.quantity)
         fee = self.commission(position.legs, position.quantity)
@@ -136,7 +134,7 @@ class _Run:
 
     def open(self, order: OpenOrder, ts: datetime) -> None:
         chain = self.chains.get(order.underlying)
-        prices = self.fills.prices(chain, order.legs, opening=True) if chain is not None else None
+        prices = self.fill_prices(chain, order.legs, opening=True)
         if prices is None:
             self.stats.skipped_entries += 1
             log.debug("%s: no quotes to open at %s", order.underlying, ts)
@@ -158,7 +156,8 @@ class _Run:
         )
         if quantity == 0:
             self.stats.reject(reason)
-            log.debug("%s: entry rejected at %s: %s", order.underlying, ts, reason)
+            level = logging.WARNING if reason == "undefined_risk" else logging.DEBUG
+            log.log(level, "%s: entry rejected at %s: %s", order.underlying, ts, reason)
             return
         self.add_spread_cost(chain, order.legs, prices, quantity)
         position = portfolio.open(
@@ -179,6 +178,9 @@ class _Run:
             ts,
         )
 
+    def fill_prices(self, chain: pl.DataFrame | None, legs, opening: bool) -> list[float] | None:
+        return None if chain is None else self.fills.prices(chain, legs, opening)
+
     def add_spread_cost(self, chain: pl.DataFrame, legs, prices, quantity: int) -> None:
         mids = mid_prices(chain, legs)
         self.stats.spread_cost += abs(leg_value(legs, prices) - leg_value(legs, mids)) * quantity
@@ -186,11 +188,7 @@ class _Run:
     def close_all_at_end(self, ts: datetime) -> None:
         for position in list(self.portfolio.positions.values()):
             chain = self.chains.get(position.underlying)
-            prices = (
-                self.fills.prices(chain, position.legs, opening=False)
-                if chain is not None
-                else None
-            )
+            prices = self.fill_prices(chain, position.legs, opening=False)
             if prices is not None:
                 self.add_spread_cost(chain, position.legs, prices, position.quantity)
                 fee = self.commission(position.legs, position.quantity)
@@ -200,6 +198,11 @@ class _Run:
                     for leg in position.legs
                 ]
                 fee = 0.0
+                log.warning(
+                    "position %d (%s) closed at intrinsic value: no quotes at the last step",
+                    position.id,
+                    position.underlying,
+                )
             _log_closed(self.portfolio.close(position.id, prices, ts, fee, "end_of_data"))
 
 
