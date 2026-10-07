@@ -1,7 +1,7 @@
 .venv/
 __pycache__/
 runs/
-data/
+/data/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
