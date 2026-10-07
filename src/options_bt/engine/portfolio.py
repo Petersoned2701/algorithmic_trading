@@ -62,7 +62,11 @@ class Portfolio:
     ) -> list[TradeRecord]:
         closed = []
         for position in list(self.positions.values()):
-            due = [leg for leg in position.legs if is_due(leg.key.expiration, ts, session_close)]
+            due = [
+                leg
+                for leg in position.legs
+                if leg.key.underlying in spots and is_due(leg.key.expiration, ts, session_close)
+            ]
             if not due:
                 continue
             assigned = False

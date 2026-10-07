@@ -144,6 +144,15 @@ def test_partial_settlement_with_realized_loss_flows_into_pnl():
     assert tr.exit_value == pytest.approx(0.0)
 
 
+def test_due_leg_without_spot_waits_for_a_step_that_has_it():
+    p = Portfolio(10_000)
+    pos = p.open("SPX", [L(-1, "P", 100, price=1.0, underlying="SPX")], 1, T0, 0.0, 9_900.0, {})
+    assert p.settle_expired(EXPIRY_TS, {"SPY": 90.0}, time(15, 45)) == []
+    assert pos.id in p.positions and p.cash == pytest.approx(10_100)
+    (tr,) = p.settle_expired(expiry_ts(date(2024, 2, 20)), {"SPX": 92.0}, time(15, 45))
+    assert tr.pnl == pytest.approx(100 - 800)
+
+
 def test_stale_mark_counted(spy_chain):
     p = Portfolio(10_000)
     p.open("SPY", [L(-1, "P", 12345.0, price=2.0)], 1, T0, 0, None, {})
