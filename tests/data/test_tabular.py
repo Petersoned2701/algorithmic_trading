@@ -219,3 +219,16 @@ def test_null_date_or_expiration_is_data_error(tmp_path, bad_column):
     raw.write_text("\n".join([lines[0], ",".join(first), *lines[2:]]) + "\n")
     with pytest.raises(DataError, match=f"1 null values in column '{bad_column}'"):
         convert(raw, SAMPLES / "long_mapping.yaml", tmp_path / "data")
+
+
+def test_second_tabular_import_needs_replace_and_new_values_win(tmp_path):
+    convert(SAMPLES / "long_sample.csv", SAMPLES / "long_mapping.yaml", tmp_path)
+    with pytest.raises(DataError, match="--replace"):
+        convert(SAMPLES / "long_sample.csv", SAMPLES / "long_mapping.yaml", tmp_path)
+    raw = tmp_path / "changed.csv"
+    raw.write_text((SAMPLES / "long_sample.csv").read_text().replace(",5.1,5.3,", ",5.0,5.4,"))
+    s = convert(raw, SAMPLES / "long_mapping.yaml", tmp_path, replace=True)
+    chain = _first_chain(tmp_path)
+    call = chain.filter((pl.col("right") == "C") & (pl.col("strike") == 470.0)).row(0, named=True)
+    assert s.rows_written == 4 and chain.height == 4
+    assert (call["bid"], call["ask"]) == (5.0, 5.4)

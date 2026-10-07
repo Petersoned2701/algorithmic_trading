@@ -70,3 +70,11 @@ def test_missing_data_exit_code(tmp_path, capsys):
     )
     assert code == 2
     assert "error:" in capsys.readouterr().err
+
+
+def test_import_twice_needs_replace_flag(demo_root, capsys):
+    args = ["data", "import", "synthetic", "examples/spy_path.csv", "--data-root", str(demo_root)]
+    capsys.readouterr()
+    assert main(args) == 2
+    assert "--replace" in capsys.readouterr().err
+    assert main([*args, "--replace"]) == 0

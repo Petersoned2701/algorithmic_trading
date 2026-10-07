@@ -45,7 +45,7 @@ def make_store(tmp_path: Path) -> Callable[..., Path]:
             frames.append(
                 generate_chains(underlying, list(zip(days, closes, strict=True)), **gen_kwargs)
             )
-        write_quotes(pl.concat(frames), tmp_path)
+        write_quotes(pl.concat(frames), tmp_path, replace=True)
         return tmp_path
 
     return _make

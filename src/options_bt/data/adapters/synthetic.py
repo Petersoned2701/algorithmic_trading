@@ -104,7 +104,7 @@ def generate_chains(
     return pl.DataFrame(cols, schema=QUOTE_SCHEMA)
 
 
-def convert(raw_path: Path, data_root: Path, **kwargs) -> ImportSummary:
+def convert(raw_path: Path, data_root: Path, replace: bool = False, **kwargs) -> ImportSummary:
     """Read a `date,underlying,close` CSV, generate chains per underlying and write them."""
     try:
         raw = pl.read_csv(raw_path, try_parse_dates=True)
@@ -122,4 +122,4 @@ def convert(raw_path: Path, data_root: Path, **kwargs) -> ImportSummary:
     for (underlying,), group in raw.sort("date").group_by(["underlying"], maintain_order=True):
         closes = list(zip(group["date"], group["close"].cast(pl.Float64), strict=True))
         frames.append(generate_chains(str(underlying), closes, **kwargs))
-    return write_quotes(pl.concat(frames), data_root)
+    return write_quotes(pl.concat(frames), data_root, replace=replace)

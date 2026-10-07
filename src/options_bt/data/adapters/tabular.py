@@ -162,7 +162,9 @@ def _wide_rows(frame: pl.DataFrame, m: Mapping, raw_path: Path) -> pl.DataFrame:
         raise DataError(f"cannot combine call and put columns of {raw_path}: {exc}") from exc
 
 
-def convert(raw_path: Path, mapping_path: Path, data_root: Path) -> ImportSummary:
+def convert(
+    raw_path: Path, mapping_path: Path, data_root: Path, replace: bool = False
+) -> ImportSummary:
     raw_path = Path(raw_path)
     mapping = load_mapping(mapping_path)
     if not mapping.verified:
@@ -203,4 +205,4 @@ def convert(raw_path: Path, mapping_path: Path, data_root: Path) -> ImportSummar
             )
         else:
             rows = rows.with_columns(pl.lit(None).alias(name))
-    return write_quotes(rows.select(list(QUOTE_SCHEMA)), data_root)
+    return write_quotes(rows.select(list(QUOTE_SCHEMA)), data_root, replace=replace)

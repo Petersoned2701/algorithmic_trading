@@ -202,7 +202,7 @@ def test_fingerprint_changes_when_data_added(make_store, tmp_path):
     before = QuoteStore(root).fingerprint()
     write_quotes(
         pl.DataFrame(
-            [_quote(date(2024, 3, 1), date(2024, 4, 5), 100.0, "C", 0.2)], schema=QUOTE_SCHEMA
+            [_quote(date(2025, 3, 1), date(2025, 4, 5), 100.0, "C", 0.2)], schema=QUOTE_SCHEMA
         ),
         root,
     )

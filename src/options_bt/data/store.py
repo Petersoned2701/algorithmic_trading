@@ -20,22 +20,35 @@ class ImportSummary:
     partitions: int
 
 
-def write_quotes(df: pl.DataFrame, data_root: Path) -> ImportSummary:
-    """Validate and write quotes to `quotes/underlying=<U>/year=<Y>/part-<n>.parquet`.
+def write_quotes(df: pl.DataFrame, data_root: Path, replace: bool = False) -> ImportSummary:
+    """Validate and write quotes to `quotes/underlying=<U>/year=<Y>/part-0.parquet`.
 
-    Each call writes new part files (never overwriting) and appends a line to `import_log.jsonl`.
+    A (underlying, year) partition that already holds data is an error unless `replace`, which
+    deletes that partition's files first. Each call appends a line to `import_log.jsonl`.
     """
     clean, dropped = validate(df)
     year = pl.col("ts").dt.convert_time_zone(NEW_YORK.key).dt.year().alias("year")
     partitions = clean.with_columns(year).partition_by(["underlying", "year"], as_dict=True)
 
-    for (underlying, year_value), part in partitions.items():
-        part_dir = data_root / "quotes" / f"underlying={underlying}" / f"year={year_value}"
-        part_dir.mkdir(parents=True, exist_ok=True)
-        n = 0
-        while (part_dir / f"part-{n}.parquet").exists():
-            n += 1
-        part.drop("year").write_parquet(part_dir / f"part-{n}.parquet")
+    targets = {
+        key: data_root / "quotes" / f"underlying={key[0]}" / f"year={key[1]}" for key in partitions
+    }
+    existing = {key: sorted(d.glob("*.parquet")) for key, d in targets.items() if d.is_dir()}
+    existing = {key: files for key, files in existing.items() if files}
+    if existing and not replace:
+        names = ", ".join(sorted(f"underlying={u}/year={y}" for u, y in existing))
+        raise DataError(
+            f"quote data already exists for {names} under {data_root}; "
+            "pass --replace to overwrite those partitions"
+        )
+    for files in existing.values():
+        for path in files:
+            path.unlink()
+        log.warning("replaced %s: removed %s", files[0].parent, ", ".join(p.name for p in files))
+
+    for key, part in partitions.items():
+        targets[key].mkdir(parents=True, exist_ok=True)
+        part.drop("year").write_parquet(targets[key] / "part-0.parquet")
 
     summary = ImportSummary(clean.height, dropped, len(partitions))
     data_root.mkdir(parents=True, exist_ok=True)

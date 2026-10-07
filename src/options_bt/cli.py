@@ -29,6 +29,9 @@ def _common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-v", "--verbose", action="store_true")
 
 
+_REPLACE_HELP = "overwrite (underlying, year) partitions that already hold data"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="options-bt", description="Options backtesting engine")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -51,11 +54,13 @@ def _build_parser() -> argparse.ArgumentParser:
     synthetic_cmd = sources.add_parser("synthetic", help="generate Black-Scholes chains")
     synthetic_cmd.add_argument("raw", type=Path, help="CSV with date,underlying,close")
     synthetic_cmd.add_argument("--data-root", type=Path, required=True)
+    synthetic_cmd.add_argument("--replace", action="store_true", help=_REPLACE_HELP)
     synthetic_cmd.set_defaults(handler=_import_synthetic)
     tabular_cmd = sources.add_parser("tabular", help="convert a vendor CSV/Parquet via a mapping")
     tabular_cmd.add_argument("raw", type=Path, help="vendor CSV or Parquet file")
     tabular_cmd.add_argument("--mapping", type=Path, required=True)
     tabular_cmd.add_argument("--data-root", type=Path, required=True)
+    tabular_cmd.add_argument("--replace", action="store_true", help=_REPLACE_HELP)
     tabular_cmd.set_defaults(handler=_import_tabular)
     return parser
 
@@ -108,11 +113,16 @@ def _sweep(args: argparse.Namespace) -> int:
 
 
 def _import_synthetic(args: argparse.Namespace) -> int:
-    return _print_summary(synthetic.convert(args.raw, args.data_root), args.data_root)
+    return _print_summary(
+        synthetic.convert(args.raw, args.data_root, replace=args.replace), args.data_root
+    )
 
 
 def _import_tabular(args: argparse.Namespace) -> int:
-    return _print_summary(tabular.convert(args.raw, args.mapping, args.data_root), args.data_root)
+    return _print_summary(
+        tabular.convert(args.raw, args.mapping, args.data_root, replace=args.replace),
+        args.data_root,
+    )
 
 
 def _print_summary(summary: ImportSummary, data_root: Path) -> int:

@@ -6,8 +6,9 @@ from datetime import date
 import polars as pl
 import pytest
 
+from options_bt.data.adapters.synthetic import generate_chains
 from options_bt.data.market import MarketData
-from options_bt.data.store import QuoteStore
+from options_bt.data.store import QuoteStore, write_quotes
 from options_bt.engine.loop import run
 from options_bt.engine.position import TradeRecord
 from options_bt.strategy.base import CloseOrder, OpenOrder
@@ -148,8 +149,10 @@ def test_close_orders_for_missing_or_unquotable_positions(make_store, caplog):
     raw = no_exit_cfg().model_dump(mode="json")
     raw["underlyings"] = ["QQQ", "SPY"]
     cfg = parse_config(raw)
-    make_store({"QQQ": [100.0] * 3, "SPY": [100.0] * 10})
-    root = make_store({"QQQ": [100.0] * 5}, start=date(2024, 1, 8))
+    root = make_store({"SPY": [100.0] * 10})
+    gap_days = [date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4)]
+    gap_days += [date(2024, 1, d) for d in range(8, 13)]
+    write_quotes(generate_chains("QQQ", [(d, 100.0) for d in gap_days]), root)
     # QQQ has no chain at step 3 (Jan 5); position 1 opens at step 0.
     strategy = _OpenThenScript(cfg, {3: [1, 999], 4: [1], 5: [1, 999]})
     with caplog.at_level(logging.WARNING, logger="options_bt"):

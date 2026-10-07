@@ -6,7 +6,7 @@ import polars as pl
 import pytest
 
 from options_bt.data.adapters.synthetic import bs_delta, bs_price, convert, generate_chains
-from options_bt.data.store import ImportSummary, write_quotes
+from options_bt.data.store import ImportSummary, QuoteStore, write_quotes
 from options_bt.errors import DataError
 
 
@@ -89,12 +89,28 @@ def test_write_quotes_partitions_and_log(tmp_path):
     assert len((tmp_path / "import_log.jsonl").read_text().splitlines()) == 1
 
 
-def test_write_quotes_does_not_overwrite_and_appends_log(tmp_path):
+def test_write_quotes_into_existing_partition_raises_unless_replace(tmp_path):
+    df = generate_chains("SPY", [(date(2024, 1, 2), 100.0)])
+    write_quotes(df, tmp_path)
+    with pytest.raises(DataError, match=r"underlying=SPY.*year=2024.*--replace"):
+        write_quotes(df, tmp_path)
+    part_dir = tmp_path / "quotes/underlying=SPY/year=2024"
+    assert [p.name for p in part_dir.iterdir()] == ["part-0.parquet"]
+    assert len((tmp_path / "import_log.jsonl").read_text().splitlines()) == 1
+
+
+def test_write_quotes_replace_swaps_partition_and_new_values_win(tmp_path, caplog):
     df = generate_chains("SPY", [(date(2024, 1, 2), 100.0)])
     s1 = write_quotes(df, tmp_path)
-    s2 = write_quotes(df, tmp_path)
+    changed = df.with_columns(pl.col("bid") * 0 + 0.01, pl.col("ask") * 0 + 0.02)
+    with caplog.at_level("WARNING", logger="options_bt.data.store"):
+        s2 = write_quotes(changed, tmp_path, replace=True)
+    assert "part-0.parquet" in caplog.text
     part_dir = tmp_path / "quotes/underlying=SPY/year=2024"
-    assert sorted(p.name for p in part_dir.iterdir()) == ["part-0.parquet", "part-1.parquet"]
+    assert [p.name for p in part_dir.iterdir()] == ["part-0.parquet"]
+    stored = pl.read_parquet(part_dir / "part-0.parquet")
+    assert stored.height == s1.rows_written == s2.rows_written
+    assert set(stored["bid"]) == {0.01}
     lines = (tmp_path / "import_log.jsonl").read_text().splitlines()
     assert len(lines) == 2
     assert json.loads(lines[0]) == {
@@ -102,8 +118,26 @@ def test_write_quotes_does_not_overwrite_and_appends_log(tmp_path):
         "rows_dropped": 0,
         "partitions": 1,
     }
-    assert s1 == s2 == ImportSummary(df.height, 0, 1)
-    assert pl.read_parquet(part_dir / "part-0.parquet").height == df.height
+    assert s1 == ImportSummary(df.height, 0, 1)
+
+
+def test_write_quotes_replace_only_touches_target_partitions(tmp_path):
+    write_quotes(generate_chains("SPY", [(date(2023, 1, 3), 100.0)]), tmp_path)
+    write_quotes(generate_chains("SPY", [(date(2024, 1, 2), 100.0)]), tmp_path)
+    write_quotes(generate_chains("SPY", [(date(2024, 1, 2), 100.0)]), tmp_path, replace=True)
+    assert (tmp_path / "quotes/underlying=SPY/year=2023/part-0.parquet").exists()
+
+
+def test_synthetic_convert_second_import_needs_replace(tmp_path):
+    raw = tmp_path / "raw.csv"
+    raw.write_text("date,underlying,close\n2024-01-02,SPY,100\n")
+    root = tmp_path / "data"
+    first = convert(raw, root, max_dte=7)
+    with pytest.raises(DataError, match="--replace"):
+        convert(raw, root, max_dte=7)
+    again = convert(raw, root, replace=True, max_dte=7)
+    assert again.rows_written == first.rows_written
+    assert QuoteStore(root).fingerprint()["quotes/underlying=SPY/year=2024"]["files"] == 1
 
 
 def test_write_quotes_counts_dropped_rows(tmp_path):
