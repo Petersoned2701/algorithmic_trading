@@ -22,6 +22,7 @@ _DATA_QUALITY_KEYS = (
     "rejections",
     "dropped_rows",
 )
+_NO_TRADES_BANNER = "No trades were opened — see rejections in Data quality."
 _OOS_WARNING = "Out-of-sample window has no closed trades; treat the OOS check with caution."
 
 
@@ -36,7 +37,11 @@ def provenance(data_root: Path, store: QuoteStore) -> dict:
     commit = None
     try:
         proc = subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=Path(__file__).resolve().parent,
         )
         if proc.returncode == 0:
             commit = proc.stdout.strip() or None
@@ -75,7 +80,10 @@ def render_report(
     split: dict | None,
     checks: list[CheckResult],
 ) -> str:
-    lines = [f"# {name}", "", "## Go/no-go", ""]
+    lines = [f"# {name}", ""]
+    if metrics.get("trades") == 0:
+        lines += [_NO_TRADES_BANNER, ""]
+    lines += ["## Go/no-go", ""]
     lines += checks_table(checks)
     lines += ["", "## Metrics", ""]
     lines += _table(["Metric", "Value"], [[k, v] for k, v in metrics.items()])

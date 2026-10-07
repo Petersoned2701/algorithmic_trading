@@ -219,3 +219,24 @@ def test_load_criteria_bad_key(tmp_path):
     p.write_text("max_drawdown: 0.2\nbogus: 1\n")
     with pytest.raises(ConfigError, match="bogus"):
         load_criteria(p)
+
+
+def test_stress_check_fails_on_v_shaped_period_with_flat_end_to_end_return():
+    stress = stress_table(eq([100, 80, 100], start=date(2018, 2, 1)), [V])
+    assert stress[0]["return"] == 0.0 and stress[0]["max_drawdown"] == pytest.approx(0.2)
+    res = {r.name: r for r in evaluate(Criteria(), {}, stress, None)}
+    assert res["worst_stress_loss"] == CheckResult("worst_stress_loss", "FAIL", -0.2, -0.15)
+
+
+def test_stress_check_uses_the_worse_of_return_loss_and_drawdown():
+    stress = [{"name": "a", "return": -0.12, "max_drawdown": 0.10}]
+    res = {r.name: r for r in evaluate(Criteria(), {}, stress, None)}
+    assert res["worst_stress_loss"] == CheckResult("worst_stress_loss", "PASS", -0.12, -0.15)
+
+
+def test_zero_trade_run_makes_return_checks_not_applicable():
+    m = {"net_return": 0.0, "excess_annualized_return": 0.03, "max_drawdown": 0.0, "trades": 0}
+    split = {"out_of_sample": {"net_return": 0.0}}
+    res = {r.name: r.status for r in evaluate(Criteria(), m, [], split, robustness=0.7)}
+    assert res["net_return"] == res["excess_return"] == res["oos_net_return"] == "N/A"
+    assert res["max_drawdown"] == "PASS" and res["robustness"] == "PASS"

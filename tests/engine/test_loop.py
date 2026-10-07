@@ -184,3 +184,19 @@ def test_undefined_risk_rejection_is_a_warning(make_store, caplog):
         res = run(no_exit_cfg(), QuoteStore(root), MarketData({}), strategy)
     assert res.trades.height == 0 and res.stats.rejections == {"undefined_risk": 1}
     assert "undefined_risk" in caplog.text
+
+
+def test_zero_trade_run_warns_with_dominant_rejection_and_hint(make_store, caplog):
+    cfg = no_exit_cfg(initial_cash=1_000)
+    with caplog.at_level(logging.WARNING, logger="options_bt.engine.loop"):
+        run(cfg, QuoteStore(make_store({"SPY": [100.0] * 10})), MarketData({}))
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(
+        "0 trades" in m and "size_zero" in m and "max_loss_pct_equity" in m for m in warnings
+    )
+
+
+def test_run_with_trades_does_not_warn_about_zero_trades(make_store, caplog):
+    with caplog.at_level(logging.WARNING, logger="options_bt.engine.loop"):
+        run(no_exit_cfg(), QuoteStore(make_store({"SPY": [100.0] * 10})), MarketData({}))
+    assert "0 trades" not in caplog.text

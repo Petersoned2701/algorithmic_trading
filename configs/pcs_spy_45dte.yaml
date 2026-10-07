@@ -9,6 +9,8 @@ entry:
     - {right: put, side: short, dte: [30, 45], delta: 0.25}
     - {right: put, side: long, ref: 0, strike_offset: -5}
 exits: {profit_target_pct: 50, stop_loss_multiple: 2.0, dte_exit: 21}
+# At the default $15k account, 2% risk ($300) cannot fit a 5-wide SPY spread (~$400 max loss), so
+# no trade opens. Use XSP, a narrower spread, a bigger account or a higher max_loss_pct_equity.
 sizing: {max_loss_pct_equity: 2.0}
 portfolio_caps: {max_total_max_loss_pct: 15}
 costs:

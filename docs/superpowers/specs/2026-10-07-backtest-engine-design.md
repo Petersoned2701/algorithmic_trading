@@ -226,7 +226,7 @@ Any scalar field in a strategy config may instead be `{sweep: [v1, v2, ...]}`. (
 | Net return | > 0 |
 | Annualized return vs T-bills | Excess return > 0 |
 | Max drawdown | ≤ 25% |
-| Worst stress-period loss | ≤ 15% of equity |
+| Worst stress-period loss (max of period return loss and in-period drawdown) | ≤ 15% of equity |
 | Out-of-sample net return | > 0 (only when `oos_start` is set) |
 | Neighbour robustness (sweeps only) | ≥ 60% |
 

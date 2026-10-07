@@ -1,10 +1,12 @@
 import json
 import re
 import subprocess
+from pathlib import Path
 
 import polars as pl
 import yaml
 
+from options_bt.analytics import report as report_module
 from options_bt.analytics.criteria import CheckResult
 from options_bt.analytics.report import (
     make_run_dir,
@@ -144,3 +146,24 @@ def test_write_outputs_contents(tmp_path, small_result):
     assert pl.read_parquet(tmp_path / "trades.parquet").shape == small_result.trades.shape
     assert pl.read_parquet(tmp_path / "equity.parquet").shape == small_result.equity.shape
     assert (tmp_path / "report.md").read_text().startswith("# x")
+
+
+def test_zero_trade_banner_sits_right_under_title():
+    md = render_report("pcs", {"trades": 0}, [], None, [])
+    lines = md.splitlines()
+    assert lines[0] == "# pcs"
+    assert lines[2] == "No trades were opened — see rejections in Data quality."
+    assert "No trades were opened" not in render_report("pcs", {"trades": 3}, [], None, [])
+
+
+def test_provenance_runs_git_in_the_package_directory_not_the_cwd(make_store, monkeypatch):
+    seen = {}
+
+    def fake(args, **kwargs):
+        seen["cwd"] = kwargs.get("cwd")
+        return subprocess.CompletedProcess(args, 0, stdout="abc123\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake)
+    root = make_store({"SPY": [100.0]})
+    assert provenance(root, QuoteStore(root))["git_commit"] == "abc123"
+    assert seen["cwd"] == Path(report_module.__file__).resolve().parent

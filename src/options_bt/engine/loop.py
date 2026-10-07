@@ -216,6 +216,17 @@ def _log_closed(record: TradeRecord) -> None:
     )
 
 
+def _warn_no_trades(name: str, stats: RunStats) -> None:
+    ranked = sorted(stats.rejections.items(), key=lambda item: (-item[1], item[0]))
+    reasons = ", ".join(f"{reason} x{count}" for reason, count in ranked[:3]) or "none recorded"
+    log.warning(
+        "run %s opened 0 trades; rejections: %s. Try narrower spreads, XSP, or a higher "
+        "sizing.max_loss_pct_equity",
+        name,
+        reasons,
+    )
+
+
 def run(
     config: StrategyConfig,
     store: QuoteStore,
@@ -261,6 +272,8 @@ def run(
 
     trades = pl.DataFrame([asdict(t) for t in portfolio.trades], schema=TRADE_SCHEMA)
     equity = pl.DataFrame(rows, schema=EQUITY_SCHEMA)
+    if trades.is_empty():
+        _warn_no_trades(config.name, state.stats)
     log.info(
         "run %s done: %d trades, final equity %.2f", config.name, trades.height, rows[-1]["equity"]
     )

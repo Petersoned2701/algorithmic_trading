@@ -50,16 +50,24 @@ def evaluate(
     split: dict | None,
     robustness: float | None = None,
 ) -> list[CheckResult]:
-    stress_returns = [row["return"] for row in stress if row.get("return") is not None]
-    worst_stress = min(stress_returns) if stress_returns else None
-    oos_return = None if split is None else split["out_of_sample"]["net_return"]
+    losses = [
+        max(-row["return"], row.get("max_drawdown") or 0.0)
+        for row in stress
+        if row.get("return") is not None
+    ]
+    worst_stress = 0.0 - max(losses) if losses else None
+    traded = metrics.get("trades") != 0
+    oos_return = None if split is None or not traded else split["out_of_sample"]["net_return"]
     return [
         _check(
-            "net_return", metrics.get("net_return"), criteria.min_net_return, lambda a, t: a > t
+            "net_return",
+            metrics.get("net_return") if traded else None,
+            criteria.min_net_return,
+            lambda a, t: a > t,
         ),
         _check(
             "excess_return",
-            metrics.get("excess_annualized_return"),
+            metrics.get("excess_annualized_return") if traded else None,
             criteria.min_excess_return,
             lambda a, t: a > t,
         ),
