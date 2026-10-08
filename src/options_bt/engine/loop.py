@@ -77,8 +77,8 @@ class _Run:
         costs = self.config.costs
         return commission(legs, quantity, costs.commission_per_contract, costs.per_order_fee)
 
-    def mark_value(self) -> float:
-        return self.portfolio.mark(self.quotes)[0]
+    def equity(self) -> float:
+        return self.portfolio.cash + self.portfolio.mark(self.quotes)[0]
 
     def step(self, ts: datetime, previous: datetime | None, tbill: float | None) -> None:
         portfolio = self.portfolio
@@ -143,10 +143,9 @@ class _Run:
         req = self.margin.requirement(order.legs, net)
 
         portfolio = self.portfolio
-        equity = portfolio.cash + self.mark_value()
         quantity, reason = size(
             req,
-            equity=equity,
+            equity=self.equity(),
             cash=portfolio.cash,
             current_requirement=portfolio.requirement(self.margin),
             max_loss_pct_equity=self.config.sizing.max_loss_pct_equity,
@@ -254,7 +253,7 @@ def run(
         rows.append(
             {
                 "ts": ts,
-                "equity": portfolio.cash + state.mark_value(),
+                "equity": state.equity(),
                 "cash": portfolio.cash,
                 "open_positions": len(portfolio.positions),
                 "requirement": portfolio.requirement(state.margin),
