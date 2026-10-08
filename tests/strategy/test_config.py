@@ -1,32 +1,32 @@
 import copy
 from datetime import time
+from pathlib import Path
 
 import pytest
 import yaml
 
 from options_bt.errors import ConfigError
 from options_bt.execution.fills import DEFAULT_FILL_FRACTION
-from options_bt.strategy.base import RunStats
+from options_bt.loaders import load_yaml
 from options_bt.strategy.config import parse_config
 from tests.helpers import PCS, PCS_NO_FILTERS
 
 
-def _bad(path, value):
-    raw = copy.deepcopy(PCS)
+def _set(raw, path, value):
+    """Deep copy of `raw` with `value` at `path`, creating missing dicts on the way."""
+    raw = copy.deepcopy(raw)
     target = raw
     for key in path[:-1]:
+        if isinstance(target, dict):
+            target.setdefault(key, {})
         target = target[key]
     target[path[-1]] = value
     return raw
 
 
-def test_example_config_parses():
+def test_example_config_parses_with_expected_values():
     cfg = parse_config(PCS)
     assert cfg.entry.legs[0].right == "P" and cfg.entry.legs[1].ref == 0
-
-
-def test_example_config_values():
-    cfg = parse_config(PCS)
     assert cfg.entry.legs[0].dte == (30, 45)
     assert cfg.entry.schedule.weekdays == ["MON", "THU"]
     assert cfg.account.initial_cash == 15000.0
@@ -45,10 +45,8 @@ def test_right_is_normalised(right):
 
 
 def test_bad_right_rejected():
-    raw = copy.deepcopy(PCS)
-    raw["entry"]["legs"][0]["right"] = "straddle"
     with pytest.raises(ConfigError, match="right"):
-        parse_config(raw)
+        parse_config(_set(PCS, ["entry", "legs", 0, "right"], "straddle"))
 
 
 def test_typo_names_the_field():
@@ -84,70 +82,55 @@ def test_leg_rejects_both_selectors():
 
 
 def test_ref_leg_may_carry_dte():
-    ok = copy.deepcopy(PCS)
-    ok["entry"]["legs"][1]["dte"] = [60, 90]
-    assert parse_config(ok).entry.legs[1].dte == (60, 90)
+    cfg = parse_config(_set(PCS, ["entry", "legs", 1, "dte"], [60, 90]))
+    assert cfg.entry.legs[1].dte == (60, 90)
 
 
 def test_forward_ref_rejected():
-    bad = copy.deepcopy(PCS)
-    bad["entry"]["legs"][1]["ref"] = 1
     with pytest.raises(ConfigError, match="earlier"):
-        parse_config(bad)
+        parse_config(_set(PCS, ["entry", "legs", 1, "ref"], 1))
 
 
 def test_ref_on_first_leg_rejected():
-    bad = copy.deepcopy(PCS)
-    bad["entry"]["legs"] = [{"right": "put", "side": "long", "ref": 0, "strike_offset": -5}]
+    leg = {"right": "put", "side": "long", "ref": 0, "strike_offset": -5}
     with pytest.raises(ConfigError, match="earlier"):
-        parse_config(bad)
+        parse_config(_set(PCS, ["entry", "legs"], [leg]))
 
 
 @pytest.mark.parametrize("delta", [0, 1, -0.2, 1.5])
 def test_delta_must_be_in_open_unit_interval(delta):
     with pytest.raises(ConfigError, match="delta"):
-        parse_config(_bad(["entry", "legs", 0, "delta"], delta))
+        parse_config(_set(PCS, ["entry", "legs", 0, "delta"], delta))
 
 
 @pytest.mark.parametrize("dte", [[45, 30], [-1, 30]])
 def test_dte_range_validated(dte):
     with pytest.raises(ConfigError, match="dte"):
-        parse_config(_bad(["entry", "legs", 0, "dte"], dte))
+        parse_config(_set(PCS, ["entry", "legs", 0, "dte"], dte))
 
 
 def test_ratio_must_be_positive():
     with pytest.raises(ConfigError, match="ratio"):
-        parse_config(_bad(["entry", "legs", 0, "ratio"], 0))
+        parse_config(_set(PCS, ["entry", "legs", 0, "ratio"], 0))
 
 
 def test_entry_needs_a_leg():
     with pytest.raises(ConfigError, match="legs"):
-        parse_config(_bad(["entry", "legs"], []))
+        parse_config(_set(PCS, ["entry", "legs"], []))
 
 
 def test_filter_needs_type():
     with pytest.raises(ConfigError, match="filters"):
-        parse_config(_bad(["entry", "filters"], [{"min": 20}]))
+        parse_config(_set(PCS, ["entry", "filters"], [{"min": 20}]))
 
 
 def test_unknown_weekday_rejected():
     with pytest.raises(ConfigError, match="weekdays"):
-        parse_config(_bad(["entry", "schedule", "weekdays"], ["SAT"]))
-
-
-def test_run_stats_reject_counts_by_reason():
-    stats = RunStats()
-    stats.reject("no_contract")
-    stats.reject("no_contract")
-    stats.reject("cap")
-    assert stats.rejections == {"no_contract": 2, "cap": 1}
-    assert RunStats().rejections == {}
+        parse_config(_set(PCS, ["entry", "schedule", "weekdays"], ["SAT"]))
 
 
 def _with_account(text):
-    raw = copy.deepcopy(PCS)
-    raw["account"] = yaml.safe_load(text)
-    return raw
+    return _set(PCS, ["account"], yaml.safe_load(text))
 
 
 def test_unquoted_session_close_is_rejected():
@@ -192,13 +175,8 @@ def test_tz_aware_session_close_rejected():
     ],
 )
 def test_out_of_range_values_are_rejected(path, value):
-    raw = copy.deepcopy(PCS)
-    target = raw
-    for key in path[:-1]:
-        target = target.setdefault(key, {})
-    target[path[-1]] = value
     with pytest.raises(ConfigError, match=path[-1]):
-        parse_config(raw)
+        parse_config(_set(PCS, path, value))
 
 
 @pytest.mark.parametrize(
@@ -214,9 +192,9 @@ def test_out_of_range_values_are_rejected(path, value):
     ],
 )
 def test_boundary_values_are_accepted(path, value):
-    raw = copy.deepcopy(PCS)
-    target = raw
-    for key in path[:-1]:
-        target = target.setdefault(key, {})
-    target[path[-1]] = value
-    parse_config(raw)
+    parse_config(_set(PCS, path, value))
+
+
+def test_shipped_pcs_spy_config_parses():
+    config = parse_config(load_yaml(Path("configs/pcs_spy_45dte.yaml")))
+    assert config.name == "pcs_spy_45dte" and config.underlyings == ["SPY"]

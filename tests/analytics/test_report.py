@@ -1,6 +1,7 @@
 import json
 import re
 import subprocess
+from datetime import date, time
 from pathlib import Path
 
 import polars as pl
@@ -28,15 +29,6 @@ OUTPUT_FILES = [
 ]
 
 
-def test_report_sections_and_checks():
-    md = render_report(
-        "pcs", {"net_return": 0.1}, [], None, [CheckResult("net_return", "PASS", 0.1, 0.0)]
-    )
-    assert md.index("## Go/no-go") < md.index("## Metrics")
-    assert "| net_return | PASS |" in md
-    assert "In-sample" not in md
-
-
 def test_report_section_order_and_formats():
     metrics = {
         "net_return": 0.123456,
@@ -55,6 +47,7 @@ def test_report_section_order_and_formats():
         CheckResult("robustness", "N/A", None, 0.6),
     ]
     md = render_report("pcs", metrics, stress, split, checks)
+    assert "In-sample" not in render_report("pcs", metrics, stress, None, checks)
     headings = re.findall(r"^#{1,2} .*$", md, flags=re.M)
     assert headings == [
         "# pcs",
@@ -100,22 +93,20 @@ def test_provenance_fingerprint_and_git(make_store):
     assert info["git_commit"] is None or re.fullmatch(r"[0-9a-f]{40}", info["git_commit"])
 
 
-def test_provenance_git_failure_gives_none(make_store, monkeypatch):
+def test_provenance_git_failure_gives_none(tmp_path, monkeypatch):
     def boom(*args, **kwargs):
         raise FileNotFoundError("git")
 
     monkeypatch.setattr(subprocess, "run", boom)
-    root = make_store({"SPY": [100.0] * 3})
-    assert provenance(root, QuoteStore(root))["git_commit"] is None
+    assert provenance(tmp_path, QuoteStore(tmp_path))["git_commit"] is None
 
 
-def test_provenance_nonzero_git_exit_gives_none(make_store, monkeypatch):
+def test_provenance_nonzero_git_exit_gives_none(tmp_path, monkeypatch):
     def failed(*args, **kwargs):
         return subprocess.CompletedProcess(args, 128, stdout="", stderr="fatal")
 
     monkeypatch.setattr(subprocess, "run", failed)
-    root = make_store({"SPY": [100.0] * 3})
-    assert provenance(root, QuoteStore(root))["git_commit"] is None
+    assert provenance(tmp_path, QuoteStore(tmp_path))["git_commit"] is None
 
 
 def test_plot_equity_writes_png_and_handles_empty(small_result, tmp_path):
@@ -132,8 +123,6 @@ def test_write_outputs_creates_all_files(tmp_path, small_result):
 
 
 def test_write_outputs_contents(tmp_path, small_result):
-    from datetime import date, time
-
     cfg = {"name": "x", "when": date(2024, 1, 2), "at": time(15, 45)}
     metrics = {"net_return": 0.0, "when": date(2024, 1, 2)}
     write_outputs(tmp_path, small_result, metrics, [], None, [], cfg)
@@ -156,7 +145,7 @@ def test_zero_trade_banner_sits_right_under_title():
     assert "No trades were opened" not in render_report("pcs", {"trades": 3}, [], None, [])
 
 
-def test_provenance_runs_git_in_the_package_directory_not_the_cwd(make_store, monkeypatch):
+def test_provenance_runs_git_in_the_package_directory_not_the_cwd(tmp_path, monkeypatch):
     seen = {}
 
     def fake(args, **kwargs):
@@ -164,6 +153,5 @@ def test_provenance_runs_git_in_the_package_directory_not_the_cwd(make_store, mo
         return subprocess.CompletedProcess(args, 0, stdout="abc123\n", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake)
-    root = make_store({"SPY": [100.0]})
-    assert provenance(root, QuoteStore(root))["git_commit"] == "abc123"
+    assert provenance(tmp_path, QuoteStore(tmp_path))["git_commit"] == "abc123"
     assert seen["cwd"] == Path(report_module.__file__).resolve().parent

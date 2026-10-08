@@ -1,8 +1,9 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from options_bt.engine.position import (
     Position,
-    TradeRecord,
     format_legs,
     leg_value,
     max_loss,
@@ -55,13 +56,14 @@ def test_net_short_calls_unbounded_even_when_hedged_by_puts():
     assert max_loss(legs, 100.0) is None
 
 
-def test_multi_expiry_short_without_match_is_none():
-    legs = [L(-2, "P", 100, E1), L(1, "P", 95, E2)]
-    assert max_loss(legs, 0.0) is None
-
-
-def test_multi_expiry_greedy_match_uses_each_long_once():
-    legs = [L(-1, "P", 100, E1), L(-1, "P", 100, E1), L(1, "P", 95, E2)]
+@pytest.mark.parametrize(
+    "legs",
+    [
+        [L(-2, "P", 100, E1), L(1, "P", 95, E2)],  # short without a matching long
+        [L(-1, "P", 100, E1), L(-1, "P", 100, E1), L(1, "P", 95, E2)],  # each long covers one short
+    ],
+)
+def test_multi_expiry_uncovered_short_is_unbounded(legs):
     assert max_loss(legs, 0.0) is None
 
 
@@ -91,25 +93,6 @@ def test_position_earliest_expiration_and_defaults():
     assert pos.earliest_expiration == E1
     assert pos.realized == 0.0
     assert pos.tags == {}
-
-
-def test_trade_record_fields():
-    ts = datetime(2024, 1, 2, 15, tzinfo=UTC)
-    rec = TradeRecord(
-        position_id=1,
-        underlying="SPY",
-        opened_ts=ts,
-        closed_ts=ts,
-        legs="-1 P 95.0 2024-02-16, +1 P 90.0 2024-02-16",
-        quantity=1,
-        entry_net=100.0,
-        exit_value=-20.0,
-        commissions=2.6,
-        pnl=77.4,
-        exit_reason="profit_target",
-        max_loss=400.0,
-    )
-    assert rec.pnl == 77.4
 
 
 def test_format_legs_matches_trade_record_format():

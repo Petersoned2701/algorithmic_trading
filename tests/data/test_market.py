@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -40,8 +41,6 @@ def test_malformed_csv_raises_naming_file(tmp_path, content):
 
 
 def test_example_csvs_cover_2024():
-    from pathlib import Path
-
     m = MarketData.load(Path(__file__).parents[2] / "examples")
     assert m.asof("tbill", snapshot_ts(date(2024, 6, 3))) == 5.0
     assert m.asof("vix", snapshot_ts(date(2024, 8, 5))) == 30.0

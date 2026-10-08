@@ -42,14 +42,10 @@ def test_valid_frame_is_cast_to_schema_in_column_order():
     assert KEY_COLUMNS == ["ts", "underlying", "expiration", "strike", "right"]
 
 
-def test_missing_column_raises_data_error():
-    with pytest.raises(DataError, match="delta"):
-        validate(_rows().drop("delta"))
-
-
-def test_missing_iv_column_raises_data_error():
-    with pytest.raises(DataError, match="iv"):
-        validate(_rows().drop("iv"))
+@pytest.mark.parametrize("column", ["delta", "iv"])
+def test_missing_column_raises_data_error(column):
+    with pytest.raises(DataError, match=column):
+        validate(_rows().drop(column))
 
 
 def test_uncastable_column_raises_data_error_naming_column():
@@ -112,10 +108,10 @@ def test_null_delta_and_iv_rows_are_kept():
 def test_dropped_rows_are_logged_as_warning(caplog):
     with caplog.at_level("WARNING", logger="options_bt.data.schema"):
         validate(_rows(ask=[0.0, 1.0, 1.0], bid=[0.0, 0.9, 0.9]))
-    assert "1" in caplog.text
+    assert "dropped 1 invalid or duplicate quote rows of 3" in caplog.messages
 
 
-def test_duplicate_contract_rows_keep_last():  # Review Focus 5
+def test_duplicate_contract_rows_keep_last():
     df = pl.concat([_rows().head(1), _rows(bid=[0.5, 0.5, 0.5]).head(1)])
     out, dropped = validate(df)
     assert out.height == 1 and dropped == 1 and out["bid"][0] == 0.5
