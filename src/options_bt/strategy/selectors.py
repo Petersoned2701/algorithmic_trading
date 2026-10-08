@@ -5,7 +5,7 @@ from datetime import date, datetime
 import polars as pl
 
 from options_bt.data.chain import ContractKey
-from options_bt.data.schema import NEW_YORK
+from options_bt.data.schema import ny_date
 from options_bt.engine.position import Leg
 from options_bt.errors import NoContractFound
 from options_bt.strategy.config import LegSpec
@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 
 def select_legs(chain: pl.DataFrame, specs: Sequence[LegSpec], ts: datetime) -> list[Leg]:
-    today = ts.astimezone(NEW_YORK).date()
+    today = ny_date(ts)
     legs: list[Leg] = []
     for index, spec in enumerate(specs):
         try:

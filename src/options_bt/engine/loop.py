@@ -7,7 +7,7 @@ import polars as pl
 from options_bt.data.chain import Quotes, index_quotes
 from options_bt.data.history import History
 from options_bt.data.market import MarketData
-from options_bt.data.schema import NEW_YORK
+from options_bt.data.schema import ny_date
 from options_bt.data.store import QuoteStore
 from options_bt.engine.portfolio import Portfolio
 from options_bt.engine.position import TradeRecord, leg_value
@@ -99,7 +99,7 @@ class _Run:
         self.stats.stale_marks += stale
 
         if self.config.account.cash_interest and tbill is not None and previous is not None:
-            days = (ts.astimezone(NEW_YORK).date() - previous.astimezone(NEW_YORK).date()).days
+            days = (ny_date(ts) - ny_date(previous)).days
             portfolio.cash *= 1 + tbill / 100 * days / 365
 
         ctx = StepContext(

@@ -1,6 +1,6 @@
 import logging
 
-from options_bt.data.schema import NEW_YORK
+from options_bt.data.schema import NEW_YORK, ny_date
 from options_bt.engine.position import Position, leg_value
 from options_bt.errors import NoContractFound
 from options_bt.strategy import filters
@@ -33,7 +33,7 @@ class RuleStrategy:
         prices = ctx.fill_model.prices(quotes, position.legs, opening=False)
         if prices is None:
             return None
-        today = ctx.ts.astimezone(NEW_YORK).date()
+        today = ny_date(ctx.ts)
         inputs = ExitInputs(
             pnl_per_unit=position.entry_net
             + leg_value(position.legs, prices)

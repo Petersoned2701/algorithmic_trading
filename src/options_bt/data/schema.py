@@ -71,6 +71,16 @@ def validate(df: pl.DataFrame) -> tuple[pl.DataFrame, int]:
     return out, dropped
 
 
+def ny_date(ts: datetime) -> date:
+    """The New York calendar date of `ts`."""
+    return ts.astimezone(NEW_YORK).date()
+
+
+def ny_date_expr(column: str = "ts") -> pl.Expr:
+    """The New York calendar date of a UTC datetime column."""
+    return pl.col(column).dt.convert_time_zone(NEW_YORK.key).dt.date()
+
+
 def snapshot_ts(d: date, at: time = time(15, 45)) -> datetime:
     """`d` at `at` New York local time, as a UTC-aware datetime."""
     return datetime.combine(d, at, tzinfo=NEW_YORK).astimezone(UTC)

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import polars as pl
 
-from options_bt.data.schema import NEW_YORK
+from options_bt.data.schema import ny_date
 from options_bt.errors import ConfigError, DataError
 from options_bt.strategy.base import StepContext
 
@@ -92,7 +92,7 @@ def event_blackout(
     days_before: int = 1,
     days_after: int = 0,
 ) -> bool:
-    today = ctx.ts.astimezone(NEW_YORK).date()
+    today = ny_date(ctx.ts)
     for d in _event_dates(Path(file).resolve()):
         if d - timedelta(days=days_before) <= today <= d + timedelta(days=days_after):
             log.debug("event_blackout: %s within window of event on %s", today, d)

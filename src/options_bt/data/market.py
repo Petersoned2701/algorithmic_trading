@@ -7,7 +7,7 @@ from pathlib import Path
 
 import polars as pl
 
-from options_bt.data.schema import NEW_YORK
+from options_bt.data.schema import ny_date
 from options_bt.errors import DataError
 
 log = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class MarketData:
         if name not in self.series:
             raise DataError(f"market series '{name}' not loaded")
         dates, values = self._lists[name]
-        i = bisect_right(dates, ts.astimezone(NEW_YORK).date())
+        i = bisect_right(dates, ny_date(ts))
         return values[i - 1] if i else None
 
     @cached_property

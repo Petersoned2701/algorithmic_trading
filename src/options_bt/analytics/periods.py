@@ -8,7 +8,7 @@ import polars as pl
 import yaml
 
 from options_bt.analytics.metrics import annualized_return, max_drawdown, net_return
-from options_bt.data.schema import NEW_YORK
+from options_bt.data.schema import ny_date_expr
 from options_bt.errors import ConfigError
 
 
@@ -51,14 +51,10 @@ def load_periods(path: Path | str) -> list[Period]:
     return periods
 
 
-def _et_date(column: str) -> pl.Expr:
-    return pl.col(column).dt.convert_time_zone(NEW_YORK.key).dt.date()
-
-
 def stress_table(equity: pl.DataFrame, periods: list[Period]) -> list[dict]:
     rows = []
     for period in periods:
-        window = equity.filter(_et_date("ts").is_between(period.start, period.end))
+        window = equity.filter(ny_date_expr("ts").is_between(period.start, period.end))
         if len(window) < 2:
             rows.append({"name": period.name, "return": None, "max_drawdown": None})
         else:
@@ -82,8 +78,8 @@ def _side_metrics(equity: pl.DataFrame, trades: pl.DataFrame) -> dict:
 
 
 def split_metrics(equity: pl.DataFrame, trades: pl.DataFrame, oos_start: date) -> dict:
-    is_oos = _et_date("ts") >= oos_start
-    trade_oos = _et_date("closed_ts") >= oos_start
+    is_oos = ny_date_expr("ts") >= oos_start
+    trade_oos = ny_date_expr("closed_ts") >= oos_start
     return {
         "in_sample": _side_metrics(equity.filter(~is_oos), trades.filter(~trade_oos)),
         "out_of_sample": _side_metrics(equity.filter(is_oos), trades.filter(trade_oos)),

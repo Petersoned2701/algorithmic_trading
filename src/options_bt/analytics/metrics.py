@@ -4,13 +4,14 @@ import math
 
 import polars as pl
 
+from options_bt.data.schema import ny_date
 from options_bt.strategy.base import RunStats
 
 
 def _years(ts: pl.Series) -> float:
     if len(ts) < 2:
         return 0.0
-    return (ts[-1].date() - ts[0].date()).days / 365.25
+    return (ny_date(ts[-1]) - ny_date(ts[0])).days / 365.25
 
 
 def periods_per_year(ts: pl.Series) -> float:
@@ -45,12 +46,12 @@ def max_drawdown(equity: pl.DataFrame) -> tuple[float, int]:
     if len(equity) < 2:
         return 0.0, 0
     peak = equity["equity"][0]
-    peak_date = equity["ts"][0].date()
+    peak_date = ny_date(equity["ts"][0])
     worst = 0.0
     longest = 0
     underwater = False
     for ts, value in zip(equity["ts"], equity["equity"], strict=True):
-        day = ts.date()
+        day = ny_date(ts)
         if value >= peak:
             if underwater:
                 longest = max(longest, (day - peak_date).days)

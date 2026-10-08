@@ -8,7 +8,7 @@ from typing import Literal
 
 import polars as pl
 
-from options_bt.data.schema import NEW_YORK, QUOTE_SCHEMA, validate
+from options_bt.data.schema import NEW_YORK, QUOTE_SCHEMA, ny_date_expr, validate
 from options_bt.errors import DataError
 
 log = logging.getLogger(__name__)
@@ -87,15 +87,12 @@ class QuoteStore:
         self, underlyings: Sequence[str], start: date | None = None, end: date | None = None
     ) -> list[datetime]:
         """Sorted union of snapshot times whose New York date lies within [start, end]."""
-        frames = [self._scan(u).select("ts") for u in underlyings]
-        ts = pl.concat(frames).unique().collect()["ts"]
-        et_date = ts.dt.convert_time_zone(NEW_YORK.key).dt.date()
-        keep = pl.Series([True] * len(ts))
+        ts = pl.concat([self._scan(u).select("ts") for u in underlyings]).unique()
         if start is not None:
-            keep &= et_date >= start
+            ts = ts.filter(ny_date_expr() >= start)
         if end is not None:
-            keep &= et_date <= end
-        return ts.filter(keep).sort().to_list()
+            ts = ts.filter(ny_date_expr() <= end)
+        return ts.collect()["ts"].sort().to_list()
 
     def chain(self, underlying: str, ts: datetime) -> pl.DataFrame:
         year = ts.astimezone(NEW_YORK).year
@@ -129,13 +126,14 @@ class QuoteStore:
         expiration whose calendar-day DTE (New York date) is closest to `target_dte`."""
         key = (underlying, target_dte)
         if key not in self._atm_iv_cache:
-            et_date = pl.col("ts").dt.convert_time_zone(NEW_YORK.key).dt.date()
             quotes = (
                 self._scan(underlying)
                 .select("ts", "underlying_price", "expiration", "strike", "iv")
                 .drop_nulls()
                 .with_columns(
-                    dte_gap=((pl.col("expiration") - et_date).dt.total_days() - target_dte).abs(),
+                    dte_gap=(
+                        (pl.col("expiration") - ny_date_expr()).dt.total_days() - target_dte
+                    ).abs(),
                     strike_gap=(pl.col("strike") - pl.col("underlying_price")).abs(),
                 )
             )

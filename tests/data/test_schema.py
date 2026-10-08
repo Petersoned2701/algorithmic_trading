@@ -3,7 +3,14 @@ from datetime import UTC, date, datetime
 import polars as pl
 import pytest
 
-from options_bt.data.schema import KEY_COLUMNS, QUOTE_SCHEMA, snapshot_ts, validate
+from options_bt.data.schema import (
+    KEY_COLUMNS,
+    QUOTE_SCHEMA,
+    ny_date,
+    ny_date_expr,
+    snapshot_ts,
+    validate,
+)
 from options_bt.errors import DataError
 
 
@@ -122,3 +129,10 @@ def test_snapshot_ts_handles_dst():
 def test_snapshot_ts_is_utc_aware():
     ts = snapshot_ts(date(2026, 1, 5))
     assert ts.tzinfo is UTC and ts.minute == 45
+
+
+def test_ny_date_uses_new_york_calendar_day():
+    late_utc = datetime(2026, 1, 6, 2, 30, tzinfo=UTC)  # 21:30 on Jan 5 in New York
+    assert ny_date(late_utc) == date(2026, 1, 5)
+    frame = pl.DataFrame({"ts": [late_utc]}, schema={"ts": QUOTE_SCHEMA["ts"]})
+    assert frame.select(ny_date_expr())["ts"].to_list() == [date(2026, 1, 5)]
