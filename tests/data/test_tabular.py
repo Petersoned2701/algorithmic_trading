@@ -34,15 +34,11 @@ def _wide_csv(tmp_path, row: str) -> Path:
     return raw
 
 
-def test_long_layout(tmp_path):
+def test_long_layout_values(tmp_path):
     s = convert(LONG_CSV, LONG_MAPPING, tmp_path)
     assert s.rows_written == 4
-    assert set(first_chain(tmp_path)["right"]) == {"C", "P"}
-
-
-def test_long_layout_values(tmp_path):
-    convert(LONG_CSV, LONG_MAPPING, tmp_path)
     c = first_chain(tmp_path)
+    assert set(c["right"]) == {"C", "P"}
     assert c["ts"][0] == snapshot_ts(date(2024, 1, 2))
     assert c["expiration"][0] == date(2024, 1, 19)
     put = c.filter(pl.col("right") == "P").row(0, named=True)
@@ -195,7 +191,7 @@ def test_wide_non_numeric_column_names_it(tmp_path):
 
 @pytest.mark.parametrize("bad_column", ["Date", "Expiry"])
 def test_null_date_or_expiration_is_data_error(tmp_path, bad_column):
-    lines = (LONG_CSV).read_text().splitlines()
+    lines = LONG_CSV.read_text().splitlines()
     first = lines[1].split(",")
     first[0 if bad_column == "Date" else 3] = ""
     raw = tmp_path / "long.csv"
@@ -209,7 +205,7 @@ def test_second_tabular_import_needs_replace_and_new_values_win(tmp_path):
     with pytest.raises(DataError, match="--replace"):
         convert(LONG_CSV, LONG_MAPPING, tmp_path)
     raw = tmp_path / "changed.csv"
-    raw.write_text((LONG_CSV).read_text().replace(",5.1,5.3,", ",5.0,5.4,"))
+    raw.write_text(LONG_CSV.read_text().replace(",5.1,5.3,", ",5.0,5.4,"))
     s = convert(raw, LONG_MAPPING, tmp_path, replace=True)
     chain = first_chain(tmp_path)
     call = chain.filter((pl.col("right") == "C") & (pl.col("strike") == 470.0)).row(0, named=True)
