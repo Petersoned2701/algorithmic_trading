@@ -66,6 +66,7 @@ class RuleStrategy:
                 (f for f in entry.filters if not filters.check(f, ctx, underlying)), None
             )
             if rejected is not None:
+                ctx.stats.reject(f"filter:{rejected['type']}")
                 log.debug(
                     "%s: %s filter rejected entry at %s", underlying, rejected["type"], ctx.ts
                 )

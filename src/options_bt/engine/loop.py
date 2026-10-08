@@ -219,12 +219,10 @@ def _log_closed(record: TradeRecord) -> None:
 def _warn_no_trades(name: str, stats: RunStats) -> None:
     ranked = sorted(stats.rejections.items(), key=lambda item: (-item[1], item[0]))
     reasons = ", ".join(f"{reason} x{count}" for reason, count in ranked[:3]) or "none recorded"
-    log.warning(
-        "run %s opened 0 trades; rejections: %s. Try narrower spreads, XSP, or a higher "
-        "sizing.max_loss_pct_equity",
-        name,
-        reasons,
-    )
+    hint = ""
+    if ranked and ranked[0][0] == "size_zero":
+        hint = " Try narrower spreads, XSP, or a higher sizing.max_loss_pct_equity."
+    log.warning("run %s opened 0 trades; rejections: %s.%s", name, reasons, hint)
 
 
 def run(

@@ -98,6 +98,7 @@ def test_filter_rejection_blocks_entry_and_logs_debug(ctx_factory, caplog):
         assert RuleStrategy(parse_config(cfg)).on_step(ctx) == []
     assert any(r.levelname == "DEBUG" for r in caplog.records)
     assert ctx.stats.skipped_entries == 0
+    assert ctx.stats.rejections == {"filter:vix_term_structure": 1}
 
 
 def test_filter_passing_allows_entry(ctx_factory):

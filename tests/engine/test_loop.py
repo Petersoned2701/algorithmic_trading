@@ -196,6 +196,24 @@ def test_zero_trade_run_warns_with_dominant_rejection_and_hint(make_store, caplo
     )
 
 
+def test_zero_trade_run_blocked_by_filter_names_it_without_sizing_hint(make_store, caplog):
+    raw = copy.deepcopy(PCS_NO_FILTERS)
+    raw["entry"]["schedule"] = {}
+    raw["entry"]["filters"] = [{"type": "vix_term_structure", "max_ratio": 0.5}]
+    series = {
+        name: pl.DataFrame({"date": [date(2024, 1, 1)], "value": [value]})
+        for name, value in (("vix", 20.0), ("vix3m", 17.0))
+    }
+    with caplog.at_level(logging.WARNING, logger="options_bt.engine.loop"):
+        res = run(
+            parse_config(raw), QuoteStore(make_store({"SPY": [100.0] * 10})), MarketData(series)
+        )
+    assert res.stats.rejections == {"filter:vix_term_structure": 10}
+    [message] = [r.getMessage() for r in caplog.records if "0 trades" in r.getMessage()]
+    assert "filter:vix_term_structure x10" in message
+    assert "max_loss_pct_equity" not in message
+
+
 def test_run_with_trades_does_not_warn_about_zero_trades(make_store, caplog):
     with caplog.at_level(logging.WARNING, logger="options_bt.engine.loop"):
         run(no_exit_cfg(), QuoteStore(make_store({"SPY": [100.0] * 10})), MarketData({}))
