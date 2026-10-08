@@ -1,6 +1,8 @@
 import logging
+from bisect import bisect_right
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
+from functools import cached_property
 from pathlib import Path
 
 import polars as pl
@@ -37,6 +39,12 @@ class MarketData:
         """Last value on or before the New York date of `ts`, or None if there is none."""
         if name not in self.series:
             raise DataError(f"market series '{name}' not loaded")
-        day = ts.astimezone(NEW_YORK).date()
-        rows = self.series[name].filter(pl.col("date") <= day)
-        return rows["value"][-1] if rows.height else None
+        dates, values = self._lists[name]
+        i = bisect_right(dates, ts.astimezone(NEW_YORK).date())
+        return values[i - 1] if i else None
+
+    @cached_property
+    def _lists(self) -> dict[str, tuple[list[date], list[float]]]:
+        return {
+            name: (df["date"].to_list(), df["value"].to_list()) for name, df in self.series.items()
+        }

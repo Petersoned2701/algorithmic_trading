@@ -1,3 +1,4 @@
+from bisect import bisect_right
 from datetime import datetime
 
 import polars as pl
@@ -21,4 +22,5 @@ class History:
         return self._tail(df, "atm_iv", lookback)
 
     def _tail(self, df: pl.DataFrame, column: str, lookback: int) -> pl.Series:
-        return df.filter(pl.col("ts") <= self._now)[column].tail(lookback)
+        end = bisect_right(self._store.series_ts(df), self._now)
+        return df[column].slice(max(0, end - lookback), min(end, lookback))

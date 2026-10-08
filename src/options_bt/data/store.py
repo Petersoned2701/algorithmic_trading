@@ -70,6 +70,7 @@ class QuoteStore:
         self._chain_cache: dict[str, tuple[int, dict[datetime, pl.DataFrame]]] = {}
         self._underlying_cache: dict[str, pl.DataFrame] = {}
         self._atm_iv_cache: dict[tuple[str, int], pl.DataFrame] = {}
+        self._ts_cache: dict[int, tuple[pl.DataFrame, list[datetime]]] = {}
 
     def _underlying_dir(self, underlying: str) -> Path:
         path = self.data_root / "quotes" / f"underlying={underlying}"
@@ -149,6 +150,12 @@ class QuoteStore:
                 .collect()
             )
         return self._atm_iv_cache[key]
+
+    def series_ts(self, series: pl.DataFrame) -> list[datetime]:
+        """Cached sorted `ts` list of a frame returned by `underlying_series` or `atm_iv_series`."""
+        if id(series) not in self._ts_cache:
+            self._ts_cache[id(series)] = (series, series["ts"].to_list())
+        return self._ts_cache[id(series)][1]
 
     def fingerprint(self) -> dict[str, dict]:
         """Per partition directory (relative to data_root): file count and total bytes."""

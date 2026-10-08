@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 
 from options_bt.data.history import History
@@ -25,3 +27,9 @@ def test_history_includes_now_inclusive(make_store):
     st = QuoteStore(make_store({"SPY": [100.0, 101.0]}))
     ts = st.timestamps(["SPY"])
     assert History(st, ts[0]).underlying_prices("SPY", 5).to_list() == [100.0]
+
+
+def test_history_before_first_snapshot_is_empty(make_store):
+    st = QuoteStore(make_store({"SPY": [100.0, 101.0]}))
+    h = History(st, st.timestamps(["SPY"])[0] - timedelta(days=1))
+    assert h.underlying_prices("SPY", 5).is_empty() and h.atm_iv("SPY", 5).is_empty()
