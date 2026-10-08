@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from options_bt.data.schema import QUOTE_SCHEMA, snapshot_ts
 from options_bt.data.store import ImportSummary, write_quotes
 from options_bt.errors import DataError
-from options_bt.loaders import load_yaml, validate_model
+from options_bt.loaders import load_yaml, read_table, validate_model
 
 log = logging.getLogger(__name__)
 
@@ -68,13 +68,6 @@ def _reject_unknown(section: str, values: dict, allowed: set[str]) -> None:
 
 def load_mapping(path: str | Path) -> Mapping:
     return validate_model(Mapping, load_yaml(path), f"mapping {path}")
-
-
-def _read(raw_path: Path, fmt: str) -> pl.DataFrame:
-    try:
-        return pl.read_csv(raw_path) if fmt == "csv" else pl.read_parquet(raw_path)
-    except (OSError, pl.exceptions.PolarsError) as exc:
-        raise DataError(f"cannot read {fmt} file {raw_path}: {exc}") from exc
 
 
 def _to_date(col: pl.Series, label: str, fmt: str | None, raw_path: Path) -> pl.Series:
@@ -160,7 +153,7 @@ def convert(
             "mapping %s is unverified; check a sample before trusting results",
             Path(mapping_path).stem,
         )
-    frame = _read(raw_path, mapping.format)
+    frame = read_table(raw_path, f"{mapping.format} file", mapping.format)
     if mapping.date_column not in frame.columns:
         raise DataError(f"date column '{mapping.date_column}' not found in {raw_path}")
 

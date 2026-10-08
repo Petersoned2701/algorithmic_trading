@@ -43,9 +43,10 @@ def _unreadable(what: str, path: Path) -> Iterator[None]:
         raise DataError(f"cannot read {what} {path}: {exc}") from exc
 
 
-def read_csv_or_raise(path: Path | str, what: str, **kwargs) -> pl.DataFrame:
+def read_table(path: Path | str, what: str, fmt: str = "csv", **kwargs) -> pl.DataFrame:
+    """Read a `csv` or `parquet` file, turning read failures into a DataError naming `what`."""
     with _unreadable(what, Path(path)):
-        return pl.read_csv(path, **kwargs)
+        return (pl.read_csv if fmt == "csv" else pl.read_parquet)(path, **kwargs)
 
 
 def read_dated_csv(path: Path | str, what: str, floats: Sequence[str] = ()) -> pl.DataFrame:

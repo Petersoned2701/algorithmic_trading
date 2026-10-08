@@ -1,9 +1,10 @@
+import polars as pl
 import pytest
 import yaml
 from pydantic import BaseModel, ConfigDict
 
 from options_bt.errors import ConfigError, DataError
-from options_bt.loaders import load_yaml, read_csv_or_raise, read_dated_csv, validate_model
+from options_bt.loaders import load_yaml, read_dated_csv, read_table, validate_model
 from tests.helpers import PCS
 
 
@@ -61,12 +62,14 @@ def test_validate_model_returns_the_model():
     assert validate_model(_Model, {"a": 1}).a == 1
 
 
-def test_read_csv_or_raise_names_what_and_path(tmp_path):
-    path = tmp_path / "nope.csv"
-    with pytest.raises(DataError, match="cannot read price path .*nope.csv"):
-        read_csv_or_raise(path, "price path")
-    path.write_text("a,b\n1,2\n")
-    assert read_csv_or_raise(path, "price path").columns == ["a", "b"]
+@pytest.mark.parametrize("fmt", ["csv", "parquet"])
+def test_read_table_names_what_and_path(tmp_path, fmt):
+    path = tmp_path / f"nope.{fmt}"
+    with pytest.raises(DataError, match=f"cannot read price path .*nope.{fmt}"):
+        read_table(path, "price path", fmt)
+    df = pl.DataFrame({"a": [1], "b": [2]})
+    (df.write_csv if fmt == "csv" else df.write_parquet)(path)
+    assert read_table(path, "price path", fmt).columns == ["a", "b"]
 
 
 def test_read_dated_csv_parses_sorts_and_casts(tmp_path):
