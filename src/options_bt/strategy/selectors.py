@@ -28,7 +28,7 @@ def _select_leg(chain: pl.DataFrame, spec: LegSpec, chosen: list[Leg], today: da
         expiration = _pick_expiration(chain, spec.dte, today)
     else:
         expiration = ref.key.expiration
-    rows = chain.filter((pl.col("expiration") == expiration) & (pl.col("right") == spec.right))
+    rows = chain.filter((chain["expiration"] == expiration) & (chain["right"] == spec.right))
     if rows.is_empty():
         raise NoContractFound(f"no {spec.right} quotes at expiration {expiration}")
     if ref is None:
