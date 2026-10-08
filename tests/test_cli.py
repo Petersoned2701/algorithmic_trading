@@ -7,9 +7,9 @@ from options_bt.cli import main
 from options_bt.strategy.config import load_raw, parse_config
 
 
-@pytest.fixture
-def demo_root(tmp_path):
-    root = tmp_path / "data"
+@pytest.fixture(scope="module")
+def demo_root(tmp_path_factory):
+    root = tmp_path_factory.mktemp("demo") / "data"
     assert (
         main(["data", "import", "synthetic", "examples/spy_path.csv", "--data-root", str(root)])
         == 0
@@ -74,8 +74,11 @@ def test_missing_data_exit_code(tmp_path, capsys):
     assert "error:" in capsys.readouterr().err
 
 
-def test_import_twice_needs_replace_flag(demo_root, capsys):
-    args = ["data", "import", "synthetic", "examples/spy_path.csv", "--data-root", str(demo_root)]
+def test_import_twice_needs_replace_flag(tmp_path, capsys):
+    raw = tmp_path / "closes.csv"
+    raw.write_text("date,underlying,close\n2024-01-02,SPY,100\n")
+    args = ["data", "import", "synthetic", str(raw), "--data-root", str(tmp_path / "data")]
+    assert main(args) == 0
     capsys.readouterr()
     assert main(args) == 2
     assert "--replace" in capsys.readouterr().err
