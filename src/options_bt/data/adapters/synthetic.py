@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
-from scipy.stats import norm
+from scipy.special import ndtr
 
 from options_bt.data.schema import QUOTE_SCHEMA, snapshot_ts
 from options_bt.data.store import ImportSummary, write_quotes
@@ -24,11 +24,11 @@ def _bs(spot, strike, t_years, rate: float, vol: float, right: str):
     d2 = d1 - sd
     disc = np.exp(-rate * t)
     if right == "C":
-        price = np.where(live, spot * norm.cdf(d1) - strike * disc * norm.cdf(d2), spot - strike)
-        delta = np.where(live, norm.cdf(d1), (spot > strike) * 1.0)
+        price = np.where(live, spot * ndtr(d1) - strike * disc * ndtr(d2), spot - strike)
+        delta = np.where(live, ndtr(d1), (spot > strike) * 1.0)
     else:
-        price = np.where(live, strike * disc * norm.cdf(-d2) - spot * norm.cdf(-d1), strike - spot)
-        delta = np.where(live, norm.cdf(d1) - 1.0, -1.0 * (spot < strike))
+        price = np.where(live, strike * disc * ndtr(-d2) - spot * ndtr(-d1), strike - spot)
+        delta = np.where(live, ndtr(d1) - 1.0, -1.0 * (spot < strike))
     return np.where(live, price, np.maximum(price, 0.0)), delta
 
 
@@ -71,37 +71,53 @@ def generate_chains(
         return pl.DataFrame(schema=QUOTE_SCHEMA)
     dates = [d for d, _ in closes]
     expirations = _fridays(min(dates), max(dates) + timedelta(days=max_dte))
+    constants = {
+        "underlying": underlying,
+        "style": style,
+        "settlement": settlement,
+        "iv": vol,
+        "multiplier": 100,
+    }
 
-    cols: dict[str, list] = {name: [] for name in QUOTE_SCHEMA}
+    blocks = []
     for d, close in closes:
+        dte = np.array([(exp - d).days for exp in expirations])
+        live = (dte >= 0) & (dte <= max_dte)
         k_lo = math.ceil(round(strike_range[0] * close / strike_step, 9))
         k_hi = math.floor(round(strike_range[1] * close / strike_step, 9))
         strikes = np.arange(k_lo, k_hi + 1) * strike_step
-        for exp in expirations:
-            dte = (exp - d).days
-            if not 0 <= dte <= max_dte:
-                continue
-            for right in ("C", "P"):
-                theo, delta = _bs(close, strikes, dte / 365, rate, vol, right)
-                n = len(strikes)
-                block = {
-                    "ts": [snapshot_ts(d)] * n,
-                    "underlying": [underlying] * n,
-                    "underlying_price": [close] * n,
-                    "expiration": [exp] * n,
-                    "strike": strikes,
-                    "right": [right] * n,
-                    "style": [style] * n,
-                    "settlement": [settlement] * n,
-                    "bid": np.maximum(0.0, theo - spread / 2),
-                    "ask": theo + spread / 2,
-                    "delta": delta,
-                    "iv": [vol] * n,
-                    "multiplier": [100] * n,
+        if not live.any() or not len(strikes):
+            continue
+        t_years = dte[live][:, None] / 365
+        # Axes: expiration, right (C then P), strike.
+        price, delta = (
+            np.stack(pair, axis=1)
+            for pair in zip(
+                *(_bs(close, strikes, t_years, rate, vol, r) for r in "CP"), strict=True
+            )
+        )
+        n_exp, n_strike = len(t_years), len(strikes)
+        blocks.append(
+            pl.DataFrame(
+                {
+                    "expiration": np.repeat(
+                        np.array(expirations, dtype="datetime64[D]")[live], 2 * n_strike
+                    ),
+                    "strike": np.tile(strikes, 2 * n_exp),
+                    "right": np.tile(np.repeat(["C", "P"], n_strike), n_exp),
+                    "bid": np.maximum(0.0, price - spread / 2).ravel(),
+                    "ask": (price + spread / 2).ravel(),
+                    "delta": delta.ravel(),
                 }
-                for name, values in block.items():
-                    cols[name].extend(values)
-    return pl.DataFrame(cols, schema=QUOTE_SCHEMA)
+            ).with_columns(
+                ts=pl.lit(snapshot_ts(d)),
+                underlying_price=pl.lit(close),
+                **{name: pl.lit(value) for name, value in constants.items()},
+            )
+        )
+    if not blocks:
+        return pl.DataFrame(schema=QUOTE_SCHEMA)
+    return pl.concat(blocks).select(list(QUOTE_SCHEMA)).cast(QUOTE_SCHEMA)
 
 
 def convert(raw_path: Path, data_root: Path, replace: bool = False, **kwargs) -> ImportSummary:

@@ -6,6 +6,7 @@ import polars as pl
 import pytest
 
 from options_bt.data.adapters.synthetic import bs_delta, bs_price, convert, generate_chains
+from options_bt.data.schema import NEW_YORK, snapshot_ts
 from options_bt.data.store import ImportSummary, QuoteStore, write_quotes
 from options_bt.errors import DataError
 
@@ -70,6 +71,27 @@ def test_generated_chain_lists_expiry_day_and_uses_kwargs():
     assert sorted(df["expiration"].unique()) == [date(2024, 1, 5), date(2024, 1, 12)]
     assert df["style"].unique().to_list() == ["european"]
     assert df["settlement"].unique().to_list() == ["cash"]
+
+
+def test_generated_rows_match_scalar_black_scholes_in_order():
+    days = [(date(2024, 1, 2), 100.0), (date(2024, 1, 3), 101.5)]
+    df = generate_chains("SPY", days, rate=0.03, vol=0.25, max_dte=10, strike_step=5.0)
+    strikes = {0: range(80, 121, 5), 1: range(85, 121, 5)}
+    expected_keys = [
+        (snapshot_ts(d), exp, right, float(strike))
+        for i, (d, _) in enumerate(days)
+        for exp in (date(2024, 1, 5), date(2024, 1, 12))
+        for right in "CP"
+        for strike in strikes[i]
+    ]
+    assert list(df.select("ts", "expiration", "right", "strike").iter_rows()) == expected_keys
+    for row in df.iter_rows(named=True):
+        t = (row["expiration"] - row["ts"].astimezone(NEW_YORK).date()).days / 365
+        args = (row["underlying_price"], row["strike"], t, 0.03, 0.25, row["right"])
+        theo = bs_price(*args)
+        assert row["bid"] == pytest.approx(max(0.0, theo - 0.05), abs=1e-12)
+        assert row["ask"] == pytest.approx(theo + 0.05, abs=1e-12)
+        assert row["delta"] == pytest.approx(bs_delta(*args), abs=1e-12)
 
 
 def test_generated_chain_is_valid_and_utc_snapshot():
