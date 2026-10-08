@@ -62,7 +62,8 @@ def test_config_error_exit_code(tmp_path, capsys):
         ["run", str(bad), "--data-root", str(tmp_path), "--runs-dir", str(tmp_path / "runs")]
     )
     assert code == 2
-    assert "error:" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "error:" in err and f"invalid config {bad}:" in err
 
 
 def test_missing_data_exit_code(tmp_path, capsys):

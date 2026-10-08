@@ -65,7 +65,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run(args: argparse.Namespace) -> int:
-    config = parse_config(load_yaml(args.config))
+    config = parse_config(load_yaml(args.config), f"config {args.config}")
     criteria = load_criteria(args.criteria)
     periods = load_periods(args.stress)
 

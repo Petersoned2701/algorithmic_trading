@@ -142,5 +142,5 @@ class StrategyConfig(_Model):
     margin_model: str = "defined_risk"
 
 
-def parse_config(raw: dict) -> StrategyConfig:
-    return validate_model(StrategyConfig, raw)
+def parse_config(raw: dict, source: str = "") -> StrategyConfig:
+    return validate_model(StrategyConfig, raw, source)
