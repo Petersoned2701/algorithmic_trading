@@ -1,5 +1,7 @@
 """Go/no-go criteria that decide whether a strategy is worth paper trading."""
 
+import operator
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -32,7 +34,9 @@ def load_criteria(path: Path | str) -> Criteria:
     return validate_model(Criteria, load_yaml(path), f"criteria in {path}")
 
 
-def _check(name: str, actual: float | None, threshold: float, passes) -> CheckResult:
+def _check(
+    name: str, actual: float | None, threshold: float, passes: Callable[[float, float], bool]
+) -> CheckResult:
     if actual is None:
         return CheckResult(name, "N/A", None, threshold)
     return CheckResult(name, "PASS" if passes(actual, threshold) else "FAIL", actual, threshold)
@@ -50,7 +54,7 @@ def evaluate(
         for row in stress
         if row.get("return") is not None
     ]
-    worst_stress = 0.0 - max(losses) if losses else None
+    worst_stress = -max(losses) if losses else None
     traded = metrics.get("trades") != 0
     oos_return = None if split is None or not traded else split["out_of_sample"]["net_return"]
     return [
@@ -58,23 +62,21 @@ def evaluate(
             "net_return",
             metrics.get("net_return") if traded else None,
             criteria.min_net_return,
-            lambda a, t: a > t,
+            operator.gt,
         ),
         _check(
             "excess_return",
             metrics.get("excess_annualized_return") if traded else None,
             criteria.min_excess_return,
-            lambda a, t: a > t,
+            operator.gt,
         ),
-        _check(
-            "max_drawdown", metrics.get("max_drawdown"), criteria.max_drawdown, lambda a, t: a <= t
-        ),
+        _check("max_drawdown", metrics.get("max_drawdown"), criteria.max_drawdown, operator.le),
         _check(
             "worst_stress_loss",
             worst_stress,
             -criteria.max_stress_loss,
-            lambda a, t: a >= t,
+            operator.ge,
         ),
-        _check("oos_net_return", oos_return, criteria.min_oos_net_return, lambda a, t: a > t),
-        _check("robustness", robustness, criteria.min_robustness, lambda a, t: a >= t),
+        _check("oos_net_return", oos_return, criteria.min_oos_net_return, operator.gt),
+        _check("robustness", robustness, criteria.min_robustness, operator.ge),
     ]

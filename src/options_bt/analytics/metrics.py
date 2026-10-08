@@ -1,6 +1,7 @@
 """Performance statistics from a run's equity curve and trade log."""
 
 import math
+from collections.abc import Callable
 
 import polars as pl
 
@@ -64,34 +65,33 @@ def max_drawdown(equity: pl.DataFrame) -> tuple[float, int]:
     return float(worst), longest
 
 
-def _excess_returns(equity: pl.DataFrame) -> list[float]:
+def _excess_returns(equity: pl.DataFrame) -> pl.Series:
     ppy = periods_per_year(equity["ts"])
     if ppy <= 0:
-        return []
+        return pl.Series([], dtype=pl.Float64)
     tbill = equity["tbill"] if "tbill" in equity.columns else pl.Series([None] * len(equity))
     rf = tbill.cast(pl.Float64).fill_null(0.0) / 100 / ppy
-    excess = equity["equity"].pct_change() - rf
-    return excess.drop_nulls().to_list()
+    return (equity["equity"].pct_change() - rf).drop_nulls()
+
+
+def _annualized_ratio(
+    equity: pl.DataFrame, risk: Callable[[pl.Series], float | None]
+) -> float | None:
+    excess = _excess_returns(equity)
+    if len(excess) < 2:
+        return None
+    denominator = risk(excess)
+    if not denominator:
+        return None
+    return float(excess.mean() / denominator * math.sqrt(periods_per_year(equity["ts"])))
 
 
 def sharpe(equity: pl.DataFrame) -> float | None:
-    excess = pl.Series(_excess_returns(equity), dtype=pl.Float64)
-    if len(excess) < 2:
-        return None
-    std = excess.std(ddof=1)
-    if not std:
-        return None
-    return float(excess.mean() / std * math.sqrt(periods_per_year(equity["ts"])))
+    return _annualized_ratio(equity, lambda excess: excess.std(ddof=1))
 
 
 def sortino(equity: pl.DataFrame) -> float | None:
-    excess = pl.Series(_excess_returns(equity), dtype=pl.Float64)
-    if len(excess) < 2:
-        return None
-    downside = math.sqrt(sum(min(x, 0.0) ** 2 for x in excess) / len(excess))
-    if downside == 0:
-        return None
-    return float(excess.mean() / downside * math.sqrt(periods_per_year(equity["ts"])))
+    return _annualized_ratio(equity, lambda excess: excess.clip(upper_bound=0).pow(2).mean() ** 0.5)
 
 
 def trade_stats(trades: pl.DataFrame) -> dict:
