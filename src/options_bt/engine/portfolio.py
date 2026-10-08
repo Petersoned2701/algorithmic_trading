@@ -2,9 +2,9 @@ import logging
 from collections.abc import Mapping
 from datetime import datetime, time
 
-from options_bt.data.chain import ContractKey
+from options_bt.data.chain import ContractKey, Quotes
 from options_bt.engine.position import Leg, Position, TradeRecord, format_legs, leg_value
-from options_bt.execution.fills import Quotes, mid_prices
+from options_bt.execution.fills import mid_prices
 from options_bt.execution.settlement import intrinsic, is_due
 
 log = logging.getLogger(__name__)

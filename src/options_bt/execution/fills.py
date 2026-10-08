@@ -1,12 +1,11 @@
 import logging
 from collections.abc import Mapping, Sequence
 
-from options_bt.data.chain import ContractKey
+from options_bt.data.chain import Quotes
 from options_bt.engine.position import Leg
 
 log = logging.getLogger(__name__)
 
-Quotes = Mapping[ContractKey, tuple[float, float]]
 DEFAULT_FILL_FRACTION = {1: 0.75, 2: 0.66, 3: 0.56, 4: 0.53}
 
 

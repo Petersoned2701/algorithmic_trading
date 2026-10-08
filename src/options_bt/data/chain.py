@@ -11,7 +11,10 @@ class ContractKey(NamedTuple):
     right: str
 
 
-def index_quotes(chain: pl.DataFrame) -> dict[ContractKey, tuple[float, float]]:
+Quotes = dict[ContractKey, tuple[float, float]]
+
+
+def index_quotes(chain: pl.DataFrame) -> Quotes:
     """Map each contract in one snapshot to its (bid, ask)."""
     key_columns = (chain[c].to_list() for c in ContractKey._fields)
     keys = map(ContractKey._make, zip(*key_columns, strict=True))

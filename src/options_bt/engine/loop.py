@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 import polars as pl
 
-from options_bt.data.chain import ContractKey, index_quotes
+from options_bt.data.chain import Quotes, index_quotes
 from options_bt.data.history import History
 from options_bt.data.market import MarketData
 from options_bt.data.schema import NEW_YORK
@@ -13,7 +13,7 @@ from options_bt.engine.portfolio import Portfolio
 from options_bt.engine.position import TradeRecord, leg_value
 from options_bt.errors import DataError
 from options_bt.execution.costs import commission
-from options_bt.execution.fills import FillModel, Quotes, mid_prices
+from options_bt.execution.fills import FillModel, mid_prices
 from options_bt.execution.settlement import intrinsic
 from options_bt.risk.margin import margin_model
 from options_bt.risk.sizing import size
@@ -71,7 +71,7 @@ class _Run:
         self.margin = margin_model(config.margin_model)
         self.stats = RunStats()
         self.chains: dict[str, pl.DataFrame] = {}
-        self.quotes: dict[str, dict[ContractKey, tuple[float, float]]] = {}
+        self.quotes: dict[str, Quotes] = {}
         self.last_spot: dict[str, float] = {}
 
     def commission(self, legs, quantity: int) -> float:

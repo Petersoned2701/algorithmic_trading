@@ -130,6 +130,14 @@ def test_underlying_series(make_store):
     assert s["ts"].to_list() == st.timestamps(["SPY"])
 
 
+def test_series_ts_matches_series_and_is_cached(make_store):
+    st = QuoteStore(make_store({"SPY": [100.0, 101.5, 99.0]}))
+    expected = st.timestamps(["SPY"])
+    assert st.series_ts("underlying", "SPY") == expected
+    assert st.series_ts("atm_iv", "SPY", 30) == expected
+    assert st.series_ts("underlying", "SPY") is st.series_ts("underlying", "SPY")
+
+
 def test_atm_iv_series_basic(make_store):
     st = QuoteStore(make_store({"SPY": [100.0] * 3}, vol=0.25))
     s = st.atm_iv_series("SPY")

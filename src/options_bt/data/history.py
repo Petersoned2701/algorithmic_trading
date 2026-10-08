@@ -15,12 +15,14 @@ class History:
 
     def underlying_prices(self, underlying: str, lookback: int) -> pl.Series:
         df = self._store.underlying_series(underlying)
-        return self._tail(df, "underlying_price", lookback)
+        ts = self._store.series_ts("underlying", underlying)
+        return self._tail(df, ts, "underlying_price", lookback)
 
     def atm_iv(self, underlying: str, lookback: int, target_dte: int = 30) -> pl.Series:
         df = self._store.atm_iv_series(underlying, target_dte)
-        return self._tail(df, "atm_iv", lookback)
+        ts = self._store.series_ts("atm_iv", underlying, target_dte)
+        return self._tail(df, ts, "atm_iv", lookback)
 
-    def _tail(self, df: pl.DataFrame, column: str, lookback: int) -> pl.Series:
-        end = bisect_right(self._store.series_ts(df), self._now)
+    def _tail(self, df: pl.DataFrame, ts: list[datetime], column: str, lookback: int) -> pl.Series:
+        end = bisect_right(ts, self._now)
         return df[column].slice(max(0, end - lookback), min(end, lookback))
