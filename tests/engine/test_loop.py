@@ -8,6 +8,7 @@ import pytest
 
 from options_bt.data.adapters.synthetic import generate_chains
 from options_bt.data.market import MarketData
+from options_bt.data.schema import ny_date_expr
 from options_bt.data.store import QuoteStore, write_quotes
 from options_bt.engine.loop import run
 from options_bt.engine.position import TradeRecord
@@ -82,9 +83,7 @@ def test_cash_interest_accrues_by_calendar_days_between_steps(make_store):
         QuoteStore(make_store({"SPY": [100.0] * 10})),
         MarketData({"tbill": tbill}),
     )
-    days = (
-        res.equity["ts"].dt.convert_time_zone("America/New_York").dt.date().diff().dt.total_days()
-    )
+    days = res.equity.select(ny_date_expr()).to_series().diff().dt.total_days()
     expected = 1_000.0
     for d in days.drop_nulls():
         expected *= 1 + 5.0 / 100 * d / 365

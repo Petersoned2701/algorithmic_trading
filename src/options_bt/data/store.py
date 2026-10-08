@@ -8,7 +8,7 @@ from typing import Literal
 
 import polars as pl
 
-from options_bt.data.schema import NEW_YORK, QUOTE_SCHEMA, ny_date_expr, validate
+from options_bt.data.schema import QUOTE_SCHEMA, ny_date, ny_date_expr, validate
 from options_bt.errors import DataError
 
 log = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def write_quotes(df: pl.DataFrame, data_root: Path, replace: bool = False) -> Im
     deletes that partition's files first. Each call appends a line to `import_log.jsonl`.
     """
     clean, dropped = validate(df)
-    year = pl.col("ts").dt.convert_time_zone(NEW_YORK.key).dt.year().alias("year")
+    year = ny_date_expr().dt.year().alias("year")
     partitions = clean.with_columns(year).partition_by(["underlying", "year"], as_dict=True)
 
     targets = {
@@ -95,7 +95,7 @@ class QuoteStore:
         return ts.collect()["ts"].sort().to_list()
 
     def chain(self, underlying: str, ts: datetime) -> pl.DataFrame:
-        year = ts.astimezone(NEW_YORK).year
+        year = ny_date(ts).year
         cached = self._chain_cache.get(underlying)
         if cached is None or cached[0] != year:
             year_dir = self._underlying_dir(underlying) / f"year={year}"

@@ -10,7 +10,7 @@ from options_bt.data.adapters.synthetic import generate_chains
 from options_bt.data.chain import index_quotes
 from options_bt.data.history import History
 from options_bt.data.market import MarketData
-from options_bt.data.schema import NEW_YORK, snapshot_ts, validate
+from options_bt.data.schema import ny_date, snapshot_ts, validate
 from options_bt.data.store import QuoteStore, write_quotes
 from options_bt.engine.loop import RunResult, run
 from options_bt.engine.portfolio import Portfolio
@@ -75,7 +75,7 @@ def ctx_factory(make_store) -> Callable[..., StepContext]:
         root = make_store({"SPY": [100.0] * days})
         store = QuoteStore(root)
         if on is None:
-            on = store.timestamps(["SPY"])[-1].astimezone(NEW_YORK).date()
+            on = ny_date(store.timestamps(["SPY"])[-1])
         ts = snapshot_ts(on)
         series = {
             name: pl.DataFrame({"date": [start], "value": [value]})

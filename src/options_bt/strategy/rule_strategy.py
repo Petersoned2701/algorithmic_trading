@@ -1,6 +1,6 @@
 import logging
 
-from options_bt.data.schema import NEW_YORK, ny_date
+from options_bt.data.schema import ny_date
 from options_bt.engine.position import Position, leg_value
 from options_bt.errors import NoContractFound
 from options_bt.strategy import filters
@@ -46,7 +46,7 @@ class RuleStrategy:
 
     def _scheduled(self, ctx: StepContext, step: int) -> bool:
         schedule = self.config.entry.schedule
-        weekday = _WEEKDAYS[ctx.ts.astimezone(NEW_YORK).weekday()]
+        weekday = _WEEKDAYS[ny_date(ctx.ts).weekday()]
         if schedule.weekdays is not None and weekday not in schedule.weekdays:
             return False
         return schedule.every_n_steps is None or step % schedule.every_n_steps == 0

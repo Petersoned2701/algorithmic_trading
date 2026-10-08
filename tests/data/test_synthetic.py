@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 
 from options_bt.data.adapters.synthetic import bs_delta, bs_price, convert, generate_chains
-from options_bt.data.schema import NEW_YORK, snapshot_ts, validate
+from options_bt.data.schema import ny_date, ny_date_expr, snapshot_ts, validate
 from options_bt.data.store import QuoteStore
 from options_bt.errors import DataError
 
@@ -85,7 +85,7 @@ def test_generated_rows_match_scalar_black_scholes_in_order():
     ]
     assert list(df.select("ts", "expiration", "right", "strike").iter_rows()) == expected_keys
     for row in df.iter_rows(named=True):
-        t = (row["expiration"] - row["ts"].astimezone(NEW_YORK).date()).days / 365
+        t = (row["expiration"] - ny_date(row["ts"])).days / 365
         args = (row["underlying_price"], row["strike"], t, 0.03, 0.25, row["right"])
         theo = bs_price(*args)
         assert row["bid"] == pytest.approx(max(0.0, theo - 0.05), abs=1e-12)
@@ -134,6 +134,6 @@ def test_convert_bad_csv_is_data_error(tmp_path):
 def test_make_store_fixture(make_store):
     root = make_store({"SPY": [100.0, 101.0, 102.0, 103.0]}, max_dte=14)
     df = pl.read_parquet(root / "quotes/underlying=SPY/year=2024/part-0.parquet")
-    dates = sorted(df["ts"].dt.convert_time_zone("America/New_York").dt.date().unique())
+    dates = sorted(df.select(ny_date_expr())["ts"].unique())
     assert dates == [date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4), date(2024, 1, 5)]
     assert df.filter(pl.col("ts") == df["ts"].max())["underlying_price"][0] == 103.0
