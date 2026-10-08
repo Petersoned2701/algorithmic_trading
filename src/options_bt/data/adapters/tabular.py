@@ -118,14 +118,16 @@ def _long_rows(frame: pl.DataFrame, m: Mapping, raw_path: Path) -> pl.DataFrame:
     return pl.DataFrame(picked)
 
 
-def _floats(side: dict[str, pl.Series], sources: dict[str, str], prefix: str, raw_path: Path):
+def _pick_floats(
+    frame: pl.DataFrame, source: dict[str, str], raw_path: Path, prefix: str
+) -> dict[str, pl.Series]:
     out = {}
-    for canonical, col in side.items():
+    for canonical, col in _pick(frame, source, raw_path, prefix).items():
         try:
             out[canonical] = col.cast(pl.Float64, strict=True)
         except pl.exceptions.PolarsError as exc:
             raise DataError(
-                f"cannot read column '{sources[canonical]}' (canonical '{prefix}{canonical}') "
+                f"cannot read column '{source[canonical]}' (canonical '{prefix}{canonical}') "
                 f"of {raw_path} as numbers: {exc}"
             ) from exc
     return out
@@ -133,19 +135,9 @@ def _floats(side: dict[str, pl.Series], sources: dict[str, str], prefix: str, ra
 
 def _wide_rows(frame: pl.DataFrame, m: Mapping, raw_path: Path) -> pl.DataFrame:
     shared = _pick(frame, m.columns, raw_path)
-    call = _floats(_pick(frame, m.call, raw_path, "call."), m.call, "call.", raw_path)
+    call = _pick_floats(frame, m.call, raw_path, "call.")
     put_map = {k: v for k, v in m.put.items() if not (k == "delta" and m.put_delta_from_call)}
-    put = _floats(
-        _pick(
-            frame,
-            put_map,
-            raw_path,
-            "put.",
-        ),
-        put_map,
-        "put.",
-        raw_path,
-    )
+    put = _pick_floats(frame, put_map, raw_path, "put.")
     if m.put_delta_from_call:
         put["delta"] = call["delta"] - 1.0
     sides = [
