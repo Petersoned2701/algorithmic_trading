@@ -45,17 +45,7 @@ def test_generated_chain_expirations_and_strikes():
         date(2024, 1, 5),
         date(2024, 1, 12),
     ]
-    assert sorted(df["strike"].unique()) == [
-        80.0,
-        85.0,
-        90.0,
-        95.0,
-        100.0,
-        105.0,
-        110.0,
-        115.0,
-        120.0,
-    ]
+    assert sorted(df["strike"].unique()) == [float(k) for k in range(80, 121, 5)]
     assert (df["underlying_price"] == 100.0).all()
     assert (df["multiplier"] == 100).all()
     assert (df["iv"] == 0.20).all()

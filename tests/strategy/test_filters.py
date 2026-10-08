@@ -1,10 +1,13 @@
+import dataclasses
 from datetime import date
 
 import polars as pl
 import pytest
 
+from options_bt.data.market import MarketData
 from options_bt.errors import ConfigError, DataError
 from options_bt.strategy.filters import check, validate_filters
+from tests.helpers import flat_market
 
 
 @pytest.fixture
@@ -43,8 +46,9 @@ def test_unknown_filter_and_bad_param():
 
 
 def test_vix_term_structure_missing_value_blocks_entry(ctx_factory):
-    ctx = ctx_factory()
-    ctx.market.series["vix"] = ctx.market.series["vix"].clear()
+    no_vix = pl.DataFrame(schema={"date": pl.Date, "value": pl.Float64})
+    market = MarketData({**flat_market(vix3m=17.0).series, "vix": no_vix})
+    ctx = dataclasses.replace(ctx_factory(), market=market)
     assert not check({"type": "vix_term_structure"}, ctx, "SPY")
 
 

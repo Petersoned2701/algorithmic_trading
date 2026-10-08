@@ -4,6 +4,7 @@ from datetime import date, timedelta
 import polars as pl
 
 from options_bt.data.chain import ContractKey
+from options_bt.data.market import MarketData
 from options_bt.data.schema import snapshot_ts
 from options_bt.data.store import QuoteStore
 from options_bt.engine.position import Leg
@@ -107,4 +108,11 @@ def eq(values, start: date = date(2024, 1, 2), tbill: float | None = None) -> pl
             "equity": pl.Series(list(values), dtype=pl.Float64),
             "tbill": pl.Series([tbill] * len(days), dtype=pl.Float64),
         }
+    )
+
+
+def flat_market(**values: float) -> MarketData:
+    """MarketData whose named series (vix, tbill, ...) hold one constant value from 2024-01-01."""
+    return MarketData(
+        {k: pl.DataFrame({"date": [date(2024, 1, 1)], "value": [v]}) for k, v in values.items()}
     )

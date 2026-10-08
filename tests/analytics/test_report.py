@@ -5,6 +5,7 @@ from datetime import date, time
 from pathlib import Path
 
 import polars as pl
+import pytest
 import yaml
 
 from options_bt.analytics import report as report_module
@@ -93,19 +94,17 @@ def test_provenance_fingerprint_and_git(make_store):
     assert info["git_commit"] is None or re.fullmatch(r"[0-9a-f]{40}", info["git_commit"])
 
 
-def test_provenance_git_failure_gives_none(tmp_path, monkeypatch):
-    def boom(*args, **kwargs):
-        raise FileNotFoundError("git")
-
-    monkeypatch.setattr(subprocess, "run", boom)
-    assert provenance(tmp_path, QuoteStore(tmp_path))["git_commit"] is None
+def _git_missing(*args, **kwargs):
+    raise FileNotFoundError("git")
 
 
-def test_provenance_nonzero_git_exit_gives_none(tmp_path, monkeypatch):
-    def failed(*args, **kwargs):
-        return subprocess.CompletedProcess(args, 128, stdout="", stderr="fatal")
+def _git_fails(*args, **kwargs):
+    return subprocess.CompletedProcess(args, 128, stdout="", stderr="fatal")
 
-    monkeypatch.setattr(subprocess, "run", failed)
+
+@pytest.mark.parametrize("fake_run", [_git_missing, _git_fails])
+def test_provenance_git_failure_gives_none(tmp_path, monkeypatch, fake_run):
+    monkeypatch.setattr(subprocess, "run", fake_run)
     assert provenance(tmp_path, QuoteStore(tmp_path))["git_commit"] is None
 
 

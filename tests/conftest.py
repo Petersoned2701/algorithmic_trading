@@ -3,6 +3,7 @@ from collections.abc import Callable
 from datetime import date, timedelta
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 import pytest
 
@@ -20,7 +21,7 @@ from options_bt.execution.fills import FillModel
 from options_bt.strategy.base import StepContext
 from options_bt.strategy.config import parse_config
 from options_bt.strategy.selectors import select_legs
-from tests.helpers import PCS_NO_FILTERS, daily_pcs, weekdays
+from tests.helpers import PCS_NO_FILTERS, daily_pcs, flat_market, weekdays
 
 
 @pytest.fixture(autouse=True)
@@ -69,18 +70,12 @@ def ctx_factory(make_store) -> Callable[..., StepContext]:
         if days is None:
             days = 1
             if on is not None:
-                days = sum(
-                    1 for n in range((on - start).days + 1) if (start + timedelta(n)).weekday() < 5
-                )
+                days = int(np.busday_count(start, on + timedelta(1)))
         root = make_store({"SPY": [100.0] * days})
         store = QuoteStore(root)
         if on is None:
             on = ny_date(store.timestamps(["SPY"])[-1])
         ts = snapshot_ts(on)
-        series = {
-            name: pl.DataFrame({"date": [start], "value": [value]})
-            for name, value in (("vix", vix), ("vix3m", vix3m))
-        }
         chain = store.chain("SPY", ts)
         positions = {}
         if open_pcs_with_credit is not None:
@@ -102,7 +97,7 @@ def ctx_factory(make_store) -> Callable[..., StepContext]:
             quotes={"SPY": index_quotes(chain)},
             positions=positions,
             equity=100_000.0,
-            market=MarketData(series),
+            market=flat_market(vix=vix, vix3m=vix3m),
             history=History(store, ts),
             fill_model=FillModel(),
             stats=RunStats(),

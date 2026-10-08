@@ -38,9 +38,9 @@ def test_example_config_parses_with_expected_values():
 
 @pytest.mark.parametrize("right", ["put", "P", "call", "C"])
 def test_right_is_normalised(right):
-    raw = copy.deepcopy(PCS)
-    raw["entry"]["legs"][0]["right"] = right
-    raw["entry"]["legs"][1]["right"] = right
+    raw = _set(
+        _set(PCS, ["entry", "legs", 0, "right"], right), ["entry", "legs", 1, "right"], right
+    )
     assert parse_config(raw).entry.legs[0].right == right[0].upper()
 
 
@@ -56,9 +56,7 @@ def test_typo_names_the_field():
 
 
 def test_error_lists_dotted_loc_one_per_line():
-    bad = copy.deepcopy(PCS)
-    bad["exits"] = {"profit_target_pc": 50}
-    bad["sizing"] = {}
+    bad = _set(_set(PCS, ["exits"], {"profit_target_pc": 50}), ["sizing"], {})
     with pytest.raises(ConfigError) as exc:
         parse_config(bad)
     lines = str(exc.value).splitlines()
@@ -74,9 +72,7 @@ def test_leg_needs_selector():
 
 
 def test_leg_rejects_both_selectors():
-    bad = copy.deepcopy(PCS)
-    bad["entry"]["legs"][1]["delta"] = 0.1
-    bad["entry"]["legs"][1]["dte"] = [30, 45]
+    bad = _set(_set(PCS, ["entry", "legs", 1, "delta"], 0.1), ["entry", "legs", 1, "dte"], [30, 45])
     with pytest.raises(ConfigError, match="legs"):
         parse_config(bad)
 

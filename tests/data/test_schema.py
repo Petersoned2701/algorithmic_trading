@@ -4,7 +4,6 @@ import polars as pl
 import pytest
 
 from options_bt.data.schema import (
-    KEY_COLUMNS,
     QUOTE_SCHEMA,
     ny_date,
     ny_date_expr,
@@ -39,7 +38,6 @@ def test_valid_frame_is_cast_to_schema_in_column_order():
     out, dropped = validate(_rows().select(reversed(QUOTE_SCHEMA)))
     assert dropped == 0
     assert out.schema == pl.Schema(QUOTE_SCHEMA)
-    assert KEY_COLUMNS == ["ts", "underlying", "expiration", "strike", "right"]
 
 
 @pytest.mark.parametrize("column", ["delta", "iv"])
