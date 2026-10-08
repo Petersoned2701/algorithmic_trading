@@ -1,3 +1,4 @@
+import math
 from collections.abc import Sequence
 from datetime import date, datetime
 
@@ -58,33 +59,37 @@ def _pick_expiration(chain: pl.DataFrame, dte: tuple[int, int], today: date) -> 
 
 
 def _pick_by_delta(rows: pl.DataFrame, target: float, right: str) -> dict:
-    strikes = rows.filter(pl.col("delta").is_not_null() & pl.col("delta").is_finite()).sort(
-        "strike", descending=right == "C"
-    )
-    if strikes.is_empty():
+    # Rounding makes near-ties exact; the strike term breaks them toward the further-OTM
+    # (more conservative) strike: lower for puts, higher for calls.
+    side = 1 if right == "P" else -1
+    candidates = [
+        ((round(abs(abs(delta) - target), 9), side * strike), i)
+        for i, (delta, strike) in enumerate(
+            zip(rows["delta"].to_list(), rows["strike"].to_list(), strict=True)
+        )
+        if delta is not None and math.isfinite(delta)
+    ]
+    if not candidates:
         raise NoContractFound("no quotes with a usable delta")
-    # Rounding makes near-ties exact, so arg_min picks by strike order, not float noise.
-    deltas = strikes.select(err=(pl.col("delta").abs() - target).abs().round(9))["err"]
-    # Descending for calls puts the higher (further OTM) strike first, so
-    # arg_min's first-wins tie-break is always the more conservative strike.
-    return strikes.row(deltas.arg_min(), named=True)
+    return rows.row(min(candidates)[1], named=True)
 
 
 def _pick_by_offset(rows: pl.DataFrame, ref_strike: float, offset: float) -> dict:
     target = ref_strike + offset
     tolerance = max(0.01, 0.25 * abs(offset))
-    candidates = rows.filter(pl.col("strike") != ref_strike).with_columns(
-        dist=(pl.col("strike") - target).abs()
-    )
-    if candidates.is_empty():
+    candidates = [
+        (abs(strike - target), strike, i)
+        for i, strike in enumerate(rows["strike"].to_list())
+        if strike != ref_strike
+    ]
+    if not candidates:
         raise NoContractFound(f"no strike other than the reference strike {ref_strike}")
-    best = candidates.sort("dist", "strike").row(0, named=True)
-    if best["dist"] > tolerance:
+    dist, strike, i = min(candidates)
+    if dist > tolerance:
         raise NoContractFound(
-            f"nearest strike {best['strike']} is outside tolerance {tolerance:g} "
-            f"of target {target:g}"
+            f"nearest strike {strike} is outside tolerance {tolerance:g} of target {target:g}"
         )
-    return best
+    return rows.row(i, named=True)
 
 
 def _describe(spec: LegSpec) -> str:
