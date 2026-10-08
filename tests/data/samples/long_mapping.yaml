@@ -1,0 +1,22 @@
+format: csv
+layout: long
+date_column: Date
+date_format: "%m/%d/%Y"
+columns:
+  underlying: Sym
+  underlying_price: Spot
+  expiration: Expiry
+  strike: K
+  right: Type
+  bid: Bid
+  ask: Ask
+  delta: Delta
+  iv: IV
+right_values:
+  C: call
+  P: put
+defaults:
+  style: american
+  settlement: physical
+  multiplier: 100
+verified: true

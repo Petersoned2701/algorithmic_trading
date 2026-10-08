@@ -1,0 +1,87 @@
+import shutil
+from pathlib import Path
+
+import pytest
+
+from options_bt.cli import main
+
+
+@pytest.fixture(scope="module")
+def demo_root(tmp_path_factory):
+    root = tmp_path_factory.mktemp("demo") / "data"
+    assert (
+        main(["data", "import", "synthetic", "examples/spy_path.csv", "--data-root", str(root)])
+        == 0
+    )
+    shutil.copytree("examples/market", root / "market")
+    return root
+
+
+def test_end_to_end_demo(tmp_path, demo_root, capsys):
+    runs = tmp_path / "runs"
+    code = main(
+        ["run", "configs/demo_pcs_synthetic.yaml", "--data-root", str(demo_root)]
+        + ["--runs-dir", str(runs), "--oos-start", "2024-09-01"]
+    )
+    assert code == 0
+    run_dir = next(runs.iterdir())
+    report = (run_dir / "report.md").read_text()
+    assert report.startswith("# demo_pcs_synthetic")
+    assert "## Go/no-go" in report and "In-sample" in report
+    assert "INFO" in (run_dir / "run.log").read_text()
+    assert len((run_dir / "trades.csv").read_text().splitlines()) >= 2
+    out = capsys.readouterr().out
+    assert out.splitlines()[0] == str(run_dir)
+    assert "max_drawdown" in out and "robustness" in out
+
+
+def test_sweep_writes_results(tmp_path, demo_root, capsys):
+    cfg = tmp_path / "sweep.yaml"
+    cfg.write_text(
+        Path("configs/demo_pcs_synthetic.yaml")
+        .read_text()
+        .replace("max_loss_pct_equity: 2.0", "max_loss_pct_equity: {sweep: [1.0, 2.0]}")
+    )
+    runs = tmp_path / "runs"
+    args = ["sweep", str(cfg), "--data-root", str(demo_root), "--runs-dir", str(runs)]
+    code = main([*args, "--end", "2024-03-31"])
+    assert code == 0
+    sweep_dir = next(runs.iterdir())
+    assert sweep_dir.name.endswith("_sweep_demo_pcs_synthetic")
+    assert (sweep_dir / "sweep_results.csv").exists()
+    assert "INFO" in (sweep_dir / "run.log").read_text()
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == str(sweep_dir)
+    assert lines[1].startswith("robustness: ")
+
+
+@pytest.mark.parametrize("command", ["run", "sweep"])
+def test_config_error_exit_code(tmp_path, capsys, command):
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("name: x\nbogus: 1\n")
+    code = main(
+        [command, str(bad), "--data-root", str(tmp_path), "--runs-dir", str(tmp_path / "runs")]
+    )
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "error:" in err and f"invalid config {bad}:" in err
+
+
+def test_missing_data_exit_code(tmp_path, capsys):
+    code = main(
+        ["run", "configs/demo_pcs_synthetic.yaml", "--data-root", str(tmp_path / "none")]
+        + ["--runs-dir", str(tmp_path / "runs")]
+    )
+    assert code == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_import_twice_needs_replace_flag(tmp_path, capsys):
+    raw = tmp_path / "closes.csv"
+    raw.write_text("date,underlying,close\n2024-01-02,SPY,100\n")
+    args = ["data", "import", "synthetic", str(raw), "--data-root", str(tmp_path / "data")]
+    assert main(args) == 0
+    capsys.readouterr()
+    assert main(args) == 2
+    assert "--replace" in capsys.readouterr().err
+    assert main([*args, "--replace"]) == 0

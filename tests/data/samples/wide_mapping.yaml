@@ -1,0 +1,24 @@
+format: csv
+layout: wide
+date_column: trade_date
+date_format: null
+columns:
+  underlying: ticker
+  underlying_price: stkPx
+  expiration: expirDate
+  strike: strike
+call:
+  bid: cBidPx
+  ask: cAskPx
+  delta: delta
+  iv: cMidIv
+put:
+  bid: pBidPx
+  ask: pAskPx
+  iv: pMidIv
+put_delta_from_call: true
+defaults:
+  style: american
+  settlement: physical
+  multiplier: 100
+verified: true

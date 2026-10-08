@@ -1,0 +1,30 @@
+# UNCONFIRMED GUESS: the ORATS historical data field documentation (orats.com) could not be reached
+# when this file was written (blocked by the network egress proxy). The names below are recalled
+# from memory of the ORATS strikes file layout (wide: one row per strike with call and put columns,
+# a single `delta` that is the call delta, cMidIv/pMidIv implied vols), and the MM/DD/YYYY date
+# format is a guess. Check against a sample ORATS file and its field docs, and set `verified: true`
+# only after that check. For cash-settled European indexes (SPX), change style/settlement defaults.
+format: csv
+layout: wide
+date_column: trade_date
+date_format: "%m/%d/%Y"
+columns:
+  underlying: ticker
+  underlying_price: stkPx
+  expiration: expirDate
+  strike: strike
+call:
+  bid: cBidPx
+  ask: cAskPx
+  delta: delta
+  iv: cMidIv
+put:
+  bid: pBidPx
+  ask: pAskPx
+  iv: pMidIv
+put_delta_from_call: true
+defaults:
+  style: american
+  settlement: physical
+  multiplier: 100
+verified: false

@@ -1,0 +1,6 @@
+min_net_return: 0.0
+min_excess_return: 0.0
+max_drawdown: 0.25
+max_stress_loss: 0.15
+min_oos_net_return: 0.0
+min_robustness: 0.60

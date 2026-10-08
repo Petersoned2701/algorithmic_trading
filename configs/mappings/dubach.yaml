@@ -1,0 +1,27 @@
+# UNCONFIRMED GUESS: the philippdubach/options-dataset-hist README could not be reached when this
+# file was written (github.com/philippdubach/options-dataset-hist returned 404 and the repo is not
+# accessible from this environment). The source column names below are guesses at a typical
+# long-layout options dataset. Check them against the header of a real sample file, and set
+# `verified: true` only after that check. Unverified mappings log a warning on import.
+format: parquet
+layout: long
+date_column: date
+date_format: null
+columns:
+  underlying: symbol
+  underlying_price: underlying_price
+  expiration: expiration
+  strike: strike
+  right: type
+  bid: bid
+  ask: ask
+  delta: delta
+  iv: implied_volatility
+right_values:
+  C: call
+  P: put
+defaults:
+  style: american
+  settlement: physical
+  multiplier: 100
+verified: false
