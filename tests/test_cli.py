@@ -43,7 +43,8 @@ def test_sweep_writes_results(tmp_path, demo_root, capsys):
         .replace("max_loss_pct_equity: 2.0", "max_loss_pct_equity: {sweep: [1.0, 2.0]}")
     )
     runs = tmp_path / "runs"
-    code = main(["sweep", str(cfg), "--data-root", str(demo_root), "--runs-dir", str(runs)])
+    args = ["sweep", str(cfg), "--data-root", str(demo_root), "--runs-dir", str(runs)]
+    code = main([*args, "--end", "2024-03-31"])
     assert code == 0
     sweep_dir = next(runs.iterdir())
     assert sweep_dir.name.endswith("_sweep_demo_pcs_synthetic")
