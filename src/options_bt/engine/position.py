@@ -74,12 +74,16 @@ def max_loss(legs: Sequence[Leg], net_premium: float) -> float | None:
 def _single_expiry_max_loss(legs: Sequence[Leg], net_premium: float) -> float | None:
     if sum(leg.qty for leg in legs if leg.key.right == "C") < 0:
         return None
+    # The payoff is piecewise linear with kinks only at the strikes, and with net long calls
+    # it never falls above the top strike, so spot 0 and each strike contain the minimum.
     spots = [0.0, *(leg.key.strike for leg in legs)]
     worst = min(payoff_at_expiry(legs, s) + net_premium for s in spots)
     return round(max(0.0, -worst), 6)
 
 
 def _multi_expiry_max_loss(legs: Sequence[Leg], net_premium: float) -> float | None:
+    # Greedily cover each short with the first unused long of the same right that lasts at
+    # least as long. The strike gaps bound the loss; a better pairing could only lower it.
     longs = [leg for leg in legs if leg.qty > 0]
     used: set[int] = set()
     gap_total = 0.0

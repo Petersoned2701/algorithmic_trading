@@ -63,6 +63,7 @@ def _pick_by_delta(rows: pl.DataFrame, target: float, right: str) -> dict:
     )
     if strikes.is_empty():
         raise NoContractFound("no quotes with a usable delta")
+    # Rounding makes near-ties exact, so arg_min picks by strike order, not float noise.
     deltas = strikes.select(err=(pl.col("delta").abs() - target).abs().round(9))["err"]
     # Descending for calls puts the higher (further OTM) strike first, so
     # arg_min's first-wins tie-break is always the more conservative strike.

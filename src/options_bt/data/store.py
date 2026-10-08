@@ -137,6 +137,7 @@ class QuoteStore:
                     strike_gap=(pl.col("strike") - pl.col("underlying_price")).abs(),
                 )
             )
+            # DTE-gap ties go to the earlier expiration, strike-gap ties to the lower strike.
             with_expiry = quotes.filter(
                 pl.col("dte_gap") == pl.col("dte_gap").min().over("ts")
             ).filter(pl.col("expiration") == pl.col("expiration").min().over("ts"))

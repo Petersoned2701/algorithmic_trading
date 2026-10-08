@@ -1,5 +1,3 @@
-"""Stress periods and the in/out-of-sample split."""
-
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path

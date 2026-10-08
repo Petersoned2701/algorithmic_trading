@@ -1,5 +1,3 @@
-"""Performance statistics from a run's equity curve and trade log."""
-
 import math
 from collections.abc import Callable
 

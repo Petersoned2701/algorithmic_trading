@@ -5,6 +5,7 @@ log = logging.getLogger(__name__)
 
 
 def _units(budget: float, requirement: float) -> int:
+    # The tolerance keeps an exact fit (0.3 / 0.1 is 2.9999999999999996) from losing a unit.
     return math.floor(budget / requirement + 1e-9)
 
 

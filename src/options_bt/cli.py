@@ -1,5 +1,3 @@
-"""The `options-bt` command line."""
-
 import argparse
 import json
 import sys

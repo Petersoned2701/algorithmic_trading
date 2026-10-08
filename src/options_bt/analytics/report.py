@@ -1,5 +1,3 @@
-"""Writes a backtest run's output folder: data files, markdown report and chart."""
-
 import json
 import logging
 import subprocess
