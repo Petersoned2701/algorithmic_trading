@@ -54,7 +54,7 @@ def evaluate(
         for row in stress
         if row.get("return") is not None
     ]
-    worst_stress = -max(losses) if losses else None
+    worst_stress = 0.0 - max(losses) if losses else None  # not -max(): that renders as "-0"
     traded = metrics.get("trades") != 0
     oos_return = None if split is None or not traded else split["out_of_sample"]["net_return"]
     return [

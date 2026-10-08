@@ -5,6 +5,7 @@ import pytest
 
 from options_bt.analytics.criteria import CheckResult, Criteria, evaluate, load_criteria
 from options_bt.analytics.periods import Period, load_periods, split_metrics, stress_table
+from options_bt.analytics.report import checks_table
 from options_bt.data.schema import snapshot_ts
 from options_bt.errors import ConfigError
 from tests.helpers import eq
@@ -240,3 +241,9 @@ def test_zero_trade_run_makes_return_checks_not_applicable():
     res = {r.name: r.status for r in evaluate(Criteria(), m, [], split, robustness=0.7)}
     assert res["net_return"] == res["excess_return"] == res["oos_net_return"] == "N/A"
     assert res["max_drawdown"] == "PASS" and res["robustness"] == "PASS"
+
+
+def test_no_loss_stress_period_renders_as_zero_not_negative_zero():
+    stress = [{"name": "a", "return": 0.05, "max_drawdown": 0.0}]
+    checks = evaluate(Criteria(), {}, stress, None)
+    assert "| worst_stress_loss | PASS | 0 | -0.15 |" in checks_table(checks)
