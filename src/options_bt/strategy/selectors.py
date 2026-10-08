@@ -1,4 +1,3 @@
-import logging
 from collections.abc import Sequence
 from datetime import date, datetime
 
@@ -9,8 +8,6 @@ from options_bt.data.schema import ny_date
 from options_bt.engine.position import Leg
 from options_bt.errors import NoContractFound
 from options_bt.strategy.config import LegSpec
-
-log = logging.getLogger(__name__)
 
 
 def select_legs(chain: pl.DataFrame, specs: Sequence[LegSpec], ts: datetime) -> list[Leg]:

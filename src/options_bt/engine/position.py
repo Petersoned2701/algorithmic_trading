@@ -1,12 +1,9 @@
-import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from options_bt.data.chain import ContractKey
 from options_bt.execution.settlement import intrinsic
-
-log = logging.getLogger(__name__)
 
 
 @dataclass

@@ -4,6 +4,7 @@ import copy
 import itertools
 import json
 import logging
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -97,7 +98,12 @@ def _scalar(value: Any) -> Any:
 
 
 def run_sweep(
-    raw: dict, store: QuoteStore, market: MarketData, out_dir: Path, start=None, end=None
+    raw: dict,
+    store: QuoteStore,
+    market: MarketData,
+    out_dir: Path,
+    start: date | None = None,
+    end: date | None = None,
 ) -> pl.DataFrame:
     grid, combos = expand(raw)
     rows = []

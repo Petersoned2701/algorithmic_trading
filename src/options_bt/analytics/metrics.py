@@ -6,7 +6,7 @@ from collections.abc import Callable
 import polars as pl
 
 from options_bt.data.schema import ny_date
-from options_bt.strategy.base import RunStats
+from options_bt.engine.stats import RunStats
 
 
 def _years(ts: pl.Series) -> float:

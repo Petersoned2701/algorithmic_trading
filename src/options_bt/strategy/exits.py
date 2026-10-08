@@ -1,10 +1,7 @@
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from options_bt.strategy.config import ExitConfig
-
-log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -30,16 +27,16 @@ def _dte_exit(inputs: ExitInputs, dte: float) -> bool:
     return inputs.dte <= dte
 
 
-EXITS: dict[str, Callable[[ExitInputs, float], bool]] = {
-    "profit_target_pct": _profit_target,
-    "stop_loss_multiple": _stop_loss,
-    "dte_exit": _dte_exit,
-}
+_EXITS: tuple[tuple[str, str, Callable[[ExitInputs, float], bool]], ...] = (
+    ("profit_target_pct", "profit_target", _profit_target),
+    ("stop_loss_multiple", "stop_loss", _stop_loss),
+    ("dte_exit", "dte_exit", _dte_exit),
+)
 
 
 def exit_reason(inputs: ExitInputs, cfg: ExitConfig) -> str | None:
-    for name, rule in EXITS.items():
-        value = getattr(cfg, name)
+    for field, reason, rule in _EXITS:
+        value = getattr(cfg, field)
         if value is not None and rule(inputs, value):
-            return name.removesuffix("_pct").removesuffix("_multiple")
+            return reason
     return None

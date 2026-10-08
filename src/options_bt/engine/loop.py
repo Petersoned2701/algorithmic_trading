@@ -12,19 +12,14 @@ from options_bt.data.schema import ny_date
 from options_bt.data.store import QuoteStore
 from options_bt.engine.portfolio import Portfolio
 from options_bt.engine.position import Leg, Position, TradeRecord, leg_value
+from options_bt.engine.stats import RunStats
 from options_bt.errors import DataError
 from options_bt.execution.costs import commission
 from options_bt.execution.fills import FillModel, mid_prices
 from options_bt.execution.settlement import intrinsic
 from options_bt.risk.margin import margin_model
 from options_bt.risk.sizing import size
-from options_bt.strategy.base import (
-    CloseOrder,
-    OpenOrder,
-    RunStats,
-    StepContext,
-    Strategy,
-)
+from options_bt.strategy.base import CloseOrder, OpenOrder, StepContext, Strategy
 from options_bt.strategy.config import StrategyConfig
 from options_bt.strategy.rule_strategy import RuleStrategy
 

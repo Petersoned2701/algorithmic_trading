@@ -1,4 +1,3 @@
-import logging
 import math
 from collections.abc import Sequence
 from datetime import date, timedelta
@@ -12,8 +11,6 @@ from options_bt.data.schema import QUOTE_SCHEMA, snapshot_ts
 from options_bt.data.store import ImportSummary, write_quotes
 from options_bt.errors import DataError
 from options_bt.loaders import read_csv_or_raise
-
-log = logging.getLogger(__name__)
 
 
 def _bs(spot, strike, t_years, rate: float, vol: float, right: str):
