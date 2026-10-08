@@ -1,4 +1,3 @@
-import copy
 import dataclasses
 import logging
 from datetime import date
@@ -76,8 +75,7 @@ def test_tiny_account_runs_with_zero_trades_and_fixed_frames(make_store, caplog)
 
 
 def test_cash_interest_accrues_by_calendar_days_between_steps(make_store):
-    raw = copy.deepcopy(PCS_NO_FILTERS)
-    raw["account"] = {"initial_cash": 1_000, "cash_interest": True}
+    raw = {**PCS_NO_FILTERS, "account": {"initial_cash": 1_000, "cash_interest": True}}
     res = _run(make_store, parse_config(raw), [100.0] * 10, market=flat_market(tbill=5.0))
     days = res.equity.select(ny_date_expr()).to_series().diff().dt.total_days()
     expected = 1_000.0
@@ -88,9 +86,7 @@ def test_cash_interest_accrues_by_calendar_days_between_steps(make_store):
 
 
 def test_end_of_data_falls_back_to_intrinsic_when_underlying_has_no_final_chain(make_store, caplog):
-    raw = copy.deepcopy(no_exit_cfg().model_dump(mode="json"))
-    raw["underlyings"] = ["QQQ", "SPY"]
-    cfg = parse_config(raw)
+    cfg = parse_config(daily_pcs(exits={}, underlyings=["QQQ", "SPY"]))
     root = make_store({"QQQ": [100.0] * 5, "SPY": [100.0] * 10})
     with caplog.at_level(logging.WARNING, logger="options_bt"):
         res = run(cfg, QuoteStore(root), MarketData({}))
@@ -133,9 +129,7 @@ class _OpenThenScript:
 
 
 def test_close_orders_for_missing_or_unquotable_positions(make_store, caplog):
-    raw = no_exit_cfg().model_dump(mode="json")
-    raw["underlyings"] = ["QQQ", "SPY"]
-    cfg = parse_config(raw)
+    cfg = parse_config(daily_pcs(exits={}, underlyings=["QQQ", "SPY"]))
     root = make_store({"SPY": [100.0] * 10})
     gap_days = [date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4)]
     gap_days += [date(2024, 1, d) for d in range(8, 13)]
