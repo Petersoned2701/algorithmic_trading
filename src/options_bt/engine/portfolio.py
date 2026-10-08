@@ -53,7 +53,12 @@ class Portfolio:
         return position
 
     def close(
-        self, position_id: int, prices: list[float], ts: datetime, commission: float, reason: str
+        self,
+        position_id: int,
+        prices: Sequence[float],
+        ts: datetime,
+        commission: float,
+        reason: str,
     ) -> TradeRecord:
         position = self.positions[position_id]
         self.cash += leg_value(position.legs, prices) * position.quantity - commission
@@ -120,7 +125,7 @@ class Portfolio:
         return total
 
     def _finish(
-        self, position: Position, prices: list[float], ts: datetime, reason: str
+        self, position: Position, prices: Sequence[float], ts: datetime, reason: str
     ) -> TradeRecord:
         q = position.quantity
         pnl = (
@@ -137,6 +142,7 @@ class Portfolio:
             legs=self._opened_legs.pop(position.id),
             quantity=q,
             entry_net=position.entry_net,
+            # Per-unit exit value, including settlements realized before the close.
             exit_value=(pnl + position.commissions) / q - position.entry_net,
             commissions=position.commissions,
             pnl=pnl,

@@ -19,7 +19,7 @@ _SIDE_REQUIRED = ("bid", "ask", "delta")
 _REQUIRED = (*_SHARED, "right", "bid", "ask", "delta", "style", "settlement", "multiplier")
 
 
-class Mapping(BaseModel):
+class ColumnMapping(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     format: Literal["csv", "parquet"]
@@ -66,8 +66,8 @@ def _reject_unknown(section: str, values: dict, allowed: set[str]) -> None:
         raise ValueError(f"unknown {section} keys {unknown}; allowed: {sorted(allowed)}")
 
 
-def load_mapping(path: str | Path) -> Mapping:
-    return validate_model(Mapping, load_yaml(path), f"mapping {path}")
+def load_mapping(path: str | Path) -> ColumnMapping:
+    return validate_model(ColumnMapping, load_yaml(path), f"mapping {path}")
 
 
 def _to_date(col: pl.Series, label: str, fmt: str | None, raw_path: Path) -> pl.Series:
@@ -93,7 +93,7 @@ def _pick(frame: pl.DataFrame, source: dict[str, str], raw_path: Path, prefix: s
     return out
 
 
-def _long_rows(frame: pl.DataFrame, m: Mapping, raw_path: Path) -> pl.DataFrame:
+def _long_rows(frame: pl.DataFrame, m: ColumnMapping, raw_path: Path) -> pl.DataFrame:
     picked = _pick(frame, m.columns, raw_path)
     if "right" in picked:
         to_canonical = {source: canonical for canonical, source in m.right_values.items()}
@@ -126,7 +126,7 @@ def _pick_floats(
     return out
 
 
-def _wide_rows(frame: pl.DataFrame, m: Mapping, raw_path: Path) -> pl.DataFrame:
+def _wide_rows(frame: pl.DataFrame, m: ColumnMapping, raw_path: Path) -> pl.DataFrame:
     shared = _pick(frame, m.columns, raw_path)
     call = _pick_floats(frame, m.call, raw_path, "call.")
     put_map = {k: v for k, v in m.put.items() if not (k == "delta" and m.put_delta_from_call)}

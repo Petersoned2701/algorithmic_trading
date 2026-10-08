@@ -17,8 +17,9 @@ def _bs(spot, strike, t_years, rate: float, vol: float, right: str):
     """Price and delta; numpy-vectorised over `strike`/`t_years`, intrinsic where t <= 0."""
     spot, strike, t = np.broadcast_arrays(*map(np.asarray, (spot, strike, t_years)))
     live = t > 0
-    sd = vol * np.sqrt(np.where(live, t, 1.0))
-    d1 = (np.log(spot / strike) + (rate + 0.5 * vol * vol) * np.where(live, t, 1.0)) / sd
+    t_live = np.where(live, t, 1.0)
+    sd = vol * np.sqrt(t_live)
+    d1 = (np.log(spot / strike) + (rate + 0.5 * vol * vol) * t_live) / sd
     d2 = d1 - sd
     disc = np.exp(-rate * t)
     if right == "C":
