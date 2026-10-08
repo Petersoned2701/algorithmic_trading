@@ -1,6 +1,6 @@
 # Quality review 3 (Opus), 2026-10-08: after the second fix wave
 
-Range: c359cd9..a8d058f. Grade **A**. No critical bugs. **Status: awaiting the user's decision. Nothing has been dispatched.**
+Range: c359cd9..a8d058f. Grade **A**. No critical bugs. **Status: the user approved items 1–4 on 2026-10-08. Item 5 (S2) was moved to `docs/punch-list.md`.**
 
 ## Previous fix list
 Items 1–9 landed. Item 10 was skipped on purpose; the reviewer agrees.

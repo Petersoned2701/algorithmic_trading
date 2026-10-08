@@ -9,7 +9,7 @@ You are a Senior Code Reviewer doing the final whole-branch review of `{what was
 User priorities: readable and maintainable code, "when in doubt, err on the side of less code", TDD, logging, specific error handling, reusable across strategies, extensible to intraday later.
 - Spec: `{spec path}`
 - Plan (see its Global Constraints): `{plan path}`
-- Known deferred items (don't re-report unless you disagree with deferring them): `docs/superpowers/plans/*-followups.md`
+- Known deferred items (don't re-report unless you disagree with deferring them): `docs/punch-list.md`
 
 ## Focus areas, in priority order
 1. **Repeated blocks that should be functions**, in src and tests. For each, give every location (file:line), propose one helper (name, signature, home module), and estimate the lines saved.
