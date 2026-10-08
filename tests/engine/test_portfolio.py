@@ -19,11 +19,24 @@ class FakeModel:
         return self.value
 
 
+def _open(p, legs, quantity=1, commission=0.0, max_loss=None, *, tags=None, underlying="SPY"):
+    """Open at the prices the test legs were built with (`L(..., price=)`)."""
+    prices = [leg.entry_price for leg in legs]
+    return p.open(
+        underlying,
+        legs,
+        quantity,
+        T0,
+        prices=prices,
+        commission=commission,
+        max_loss=max_loss,
+        tags=tags,
+    )
+
+
 def test_open_close_cash_and_pnl():
     p = Portfolio(10_000)
-    pos = p.open(
-        "SPY", [L(-1, "P", 95, price=2.0), L(1, "P", 90, price=1.0)], 2, T0, 2.6, 400.0, {}
-    )
+    pos = _open(p, [L(-1, "P", 95, price=2.0), L(1, "P", 90, price=1.0)], 2, 2.6, 400.0)
     assert p.cash == pytest.approx(10_000 + 200 - 2.6)
     tr = p.close(pos.id, [0.5, 0.2], T1, 2.6, "profit_target")
     assert tr.pnl == pytest.approx((100 - 30) * 2 - 5.2)
@@ -40,17 +53,27 @@ def test_open_close_cash_and_pnl():
     assert p.positions == {} and p.trades == [tr]
 
 
+def test_open_prices_legs_on_copies(spy_chain):
+    p = Portfolio(10_000)
+    legs = [L(-1, "P", 95), L(1, "P", 90)]
+    pos = p.open("SPY", legs, 2, T0, prices=[2.0, 1.0], commission=2.6, max_loss=400.0, tags={})
+    assert [leg.entry_price for leg in pos.legs] == [2.0, 1.0]
+    assert [leg.entry_price for leg in legs] == [0.0, 0.0]
+    assert pos.entry_net == pytest.approx(100.0)
+    assert p.cash == pytest.approx(10_000 + 200 - 2.6)
+
+
 def test_position_ids_are_sequential_from_one():
     p = Portfolio(10_000)
-    a = p.open("SPY", [L(-1, "P", 95, price=1.0)], 1, T0, 0.0, None, {})
-    b = p.open("SPY", [L(-1, "P", 96, price=1.0)], 1, T0, 0.0, None, {"k": "v"})
+    a = _open(p, [L(-1, "P", 95, price=1.0)])
+    b = _open(p, [L(-1, "P", 96, price=1.0)], tags={"k": "v"})
     assert (a.id, b.id) == (1, 2)
     assert b.tags == {"k": "v"}
 
 
 def test_settlement_needs_only_spot_not_quote():
     p = Portfolio(10_000)
-    p.open("SPY", [L(-1, "P", 95, price=2.0), L(1, "P", 90, price=1.0)], 1, T0, 0.0, 400.0, {})
+    _open(p, [L(-1, "P", 95, price=2.0), L(1, "P", 90, price=1.0)], max_loss=400.0)
     trades = p.settle_expired(EXPIRY_TS, {"SPY": 92.0}, time(15, 45))
     assert trades[0].pnl == pytest.approx(100 - 300)
     assert trades[0].exit_reason == "assignment"
@@ -62,7 +85,7 @@ def test_settlement_needs_only_spot_not_quote():
 
 def test_out_of_the_money_expiry_is_expired():
     p = Portfolio(10_000)
-    p.open("SPY", [L(-1, "P", 95, price=2.0), L(1, "P", 90, price=1.0)], 1, T0, 0.0, 400.0, {})
+    _open(p, [L(-1, "P", 95, price=2.0), L(1, "P", 90, price=1.0)], max_loss=400.0)
     trades = p.settle_expired(EXPIRY_TS, {"SPY": 100.0}, time(15, 45))
     assert trades[0].exit_reason == "expired"
     assert trades[0].pnl == pytest.approx(100)
@@ -70,9 +93,7 @@ def test_out_of_the_money_expiry_is_expired():
 
 def test_cash_settled_short_is_expired_not_assignment():
     p = Portfolio(10_000)
-    p.open(
-        "SPX", [L(-1, "P", 95, price=2.0, underlying="SPX", settlement="cash")], 1, T0, 0, None, {}
-    )
+    _open(p, [L(-1, "P", 95, price=2.0, underlying="SPX", settlement="cash")], underlying="SPX")
     trades = p.settle_expired(EXPIRY_TS, {"SPX": 92.0}, time(15, 45))
     assert trades[0].exit_reason == "expired"
     assert trades[0].pnl == pytest.approx(200 - 300)
@@ -80,7 +101,7 @@ def test_cash_settled_short_is_expired_not_assignment():
 
 def test_long_in_the_money_is_not_assignment():
     p = Portfolio(10_000)
-    p.open("SPY", [L(1, "P", 95, price=2.0)], 1, T0, 0, None, {})
+    _open(p, [L(1, "P", 95, price=2.0)])
     trades = p.settle_expired(EXPIRY_TS, {"SPY": 92.0}, time(15, 45))
     assert trades[0].exit_reason == "expired"
     assert trades[0].pnl == pytest.approx(-200 + 300)
@@ -88,7 +109,7 @@ def test_long_in_the_money_is_not_assignment():
 
 def test_before_session_close_nothing_settles():
     p = Portfolio(10_000)
-    p.open("SPY", [L(-1, "P", 95, price=2.0)], 1, T0, 0, None, {})
+    _open(p, [L(-1, "P", 95, price=2.0)])
     early = snapshot_ts(E1, time(10, 0))
     assert p.settle_expired(early, {"SPY": 92.0}, time(15, 45)) == []
     assert len(p.positions) == 1
@@ -113,9 +134,7 @@ def test_intrinsic():
 
 def test_calendar_front_leg_settles_back_leg_stays():
     p = Portfolio(10_000)
-    pos = p.open(
-        "SPY", [L(-1, "P", 100, E1, price=1.0), L(1, "P", 100, E2, price=2.5)], 1, T0, 0, 150.0, {}
-    )
+    pos = _open(p, [L(-1, "P", 100, E1, price=1.0), L(1, "P", 100, E2, price=2.5)], max_loss=150.0)
     assert p.settle_expired(expiry_ts(E1), {"SPY": 101.0}, time(15, 45)) == []
     assert len(p.positions[pos.id].legs) == 1
     tr = p.close(pos.id, [2.0], T1, 0.0, "time_exit")
@@ -127,15 +146,8 @@ def test_calendar_front_leg_settles_back_leg_stays():
 
 def test_partial_settlement_with_realized_loss_flows_into_pnl():
     p = Portfolio(10_000)
-    pos = p.open(
-        "SPY",
-        [L(-1, "P", 100, E1, price=1.0), L(1, "P", 100, E2, price=2.5)],
-        2,
-        T0,
-        1.0,
-        150.0,
-        {},
-    )
+    legs = [L(-1, "P", 100, E1, price=1.0), L(1, "P", 100, E2, price=2.5)]
+    pos = _open(p, legs, 2, 1.0, 150.0)
     p.settle_expired(expiry_ts(E1), {"SPY": 98.0}, time(15, 45))
     assert pos.realized == pytest.approx(-400)
     tr = p.close(pos.id, [2.0], T1, 1.0, "time_exit")
@@ -146,7 +158,9 @@ def test_partial_settlement_with_realized_loss_flows_into_pnl():
 
 def test_due_leg_without_spot_waits_for_a_step_that_has_it():
     p = Portfolio(10_000)
-    pos = p.open("SPX", [L(-1, "P", 100, price=1.0, underlying="SPX")], 1, T0, 0.0, 9_900.0, {})
+    pos = _open(
+        p, [L(-1, "P", 100, price=1.0, underlying="SPX")], max_loss=9_900.0, underlying="SPX"
+    )
     assert p.settle_expired(EXPIRY_TS, {"SPY": 90.0}, time(15, 45)) == []
     assert pos.id in p.positions and p.cash == pytest.approx(10_100)
     (tr,) = p.settle_expired(expiry_ts(date(2024, 2, 20)), {"SPX": 92.0}, time(15, 45))
@@ -155,7 +169,7 @@ def test_due_leg_without_spot_waits_for_a_step_that_has_it():
 
 def test_stale_mark_counted(spy_chain):
     p = Portfolio(10_000)
-    p.open("SPY", [L(-1, "P", 12345.0, price=2.0)], 1, T0, 0, None, {})
+    _open(p, [L(-1, "P", 12345.0, price=2.0)])
     value, stale = p.mark({"SPY": index_quotes(spy_chain)})
     assert stale == 1 and value == pytest.approx(-200.0)
 
@@ -167,7 +181,7 @@ def test_mark_uses_mid_then_last_known_mid(spy_chain):
     leg = L(-1, row["right"], row["strike"], row["expiration"], price=0.01)
     assert leg.key == key
     p = Portfolio(10_000)
-    p.open("SPY", [leg], 3, T0, 0, None, {})
+    _open(p, [leg], 3)
     value, stale = p.mark({"SPY": index_quotes(spy_chain)})
     assert stale == 0 and value == pytest.approx(-mid * 100 * 3)
     value, stale = p.mark({})
@@ -176,7 +190,7 @@ def test_mark_uses_mid_then_last_known_mid(spy_chain):
 
 def test_requirement_sums_model_over_positions_ignoring_none():
     p = Portfolio(10_000)
-    p.open("SPY", [L(-1, "P", 95, price=2.0), L(1, "P", 90, price=1.0)], 3, T0, 0, 400.0, {})
+    _open(p, [L(-1, "P", 95, price=2.0), L(1, "P", 90, price=1.0)], 3, max_loss=400.0)
     model = FakeModel(400.0)
     assert p.requirement(model) == pytest.approx(1200.0)
     assert model.calls[0][1] == pytest.approx(100.0)

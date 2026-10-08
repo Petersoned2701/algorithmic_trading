@@ -89,18 +89,15 @@ def ctx_factory(make_store) -> Callable[..., StepContext]:
         positions = {}
         if open_pcs_with_credit is not None:
             legs = select_legs(chain, parse_config(PCS_NO_FILTERS).entry.legs, ts)
-            short, long = legs
-            short.entry_price = open_pcs_with_credit + 0.10
-            long.entry_price = 0.10
             portfolio = Portfolio(100_000.0)
             portfolio.open(
                 "SPY",
                 legs,
                 1,
                 ts,
-                0.0,
-                max_loss(legs, open_pcs_with_credit * 100),
-                {"strategy": PCS_NO_FILTERS["name"]},
+                prices=[open_pcs_with_credit + 0.10, 0.10],
+                max_loss=max_loss(legs, open_pcs_with_credit * 100),
+                tags={"strategy": PCS_NO_FILTERS["name"]},
             )
             positions = portfolio.positions
         return StepContext(

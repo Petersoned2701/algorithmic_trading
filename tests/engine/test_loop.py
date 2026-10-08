@@ -186,6 +186,16 @@ def test_undefined_risk_rejection_is_a_warning(make_store, caplog):
     assert "undefined_risk" in caplog.text
 
 
+def test_order_legs_are_never_mutated(make_store):
+    root = make_store({"SPY": [100.0] * 3})
+    rejected = [L(-1, "C", 100)]
+    accepted = [L(-1, "P", 95), L(1, "P", 90)]
+    for legs in (rejected, accepted):
+        res = run(no_exit_cfg(), QuoteStore(root), MarketData({}), _OneOpen(legs))
+        assert res.trades.height == len(legs) - 1
+        assert [leg.entry_price for leg in legs] == [0.0] * len(legs)
+
+
 def test_zero_trade_run_warns_with_dominant_rejection_and_hint(make_store, caplog):
     cfg = no_exit_cfg(initial_cash=1_000)
     with caplog.at_level(logging.WARNING, logger="options_bt.engine.loop"):

@@ -1,11 +1,13 @@
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import datetime, time
 
 from options_bt.data.chain import ContractKey, Quotes
 from options_bt.engine.position import Leg, Position, TradeRecord, format_legs, leg_value
 from options_bt.execution.fills import mid_prices
 from options_bt.execution.settlement import intrinsic, is_due
+from options_bt.risk.margin import MarginModel
 
 log = logging.getLogger(__name__)
 
@@ -25,25 +27,28 @@ class Portfolio:
         legs: list[Leg],
         quantity: int,
         ts: datetime,
-        commission: float,
-        max_loss: float | None,
-        tags: dict,
+        *,
+        prices: Sequence[float],
+        commission: float = 0.0,
+        max_loss: float | None = None,
+        tags: dict | None = None,
     ) -> Position:
-        entry_net = -leg_value(legs, [leg.entry_price for leg in legs])
+        priced = [replace(leg, entry_price=price) for leg, price in zip(legs, prices, strict=True)]
+        entry_net = -leg_value(priced, prices)
         position = Position(
             id=self._next_id,
             underlying=underlying,
-            legs=list(legs),
+            legs=priced,
             quantity=quantity,
             opened_ts=ts,
             entry_net=entry_net,
             commissions=commission,
             max_loss=max_loss,
-            tags=tags,
+            tags=tags or {},
         )
         self._next_id += 1
         self.positions[position.id] = position
-        self._opened_legs[position.id] = format_legs(legs)
+        self._opened_legs[position.id] = format_legs(priced)
         self.cash += entry_net * quantity - commission
         return position
 
@@ -106,7 +111,7 @@ class Portfolio:
             total += leg_value(position.legs, prices) * position.quantity
         return total, stale
 
-    def requirement(self, model) -> float:
+    def requirement(self, model: MarginModel) -> float:
         total = 0.0
         for position in self.positions.values():
             required = model.requirement(position.legs, position.entry_net)

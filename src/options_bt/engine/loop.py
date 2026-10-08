@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 
@@ -10,7 +11,7 @@ from options_bt.data.market import MarketData
 from options_bt.data.schema import ny_date
 from options_bt.data.store import QuoteStore
 from options_bt.engine.portfolio import Portfolio
-from options_bt.engine.position import TradeRecord, leg_value
+from options_bt.engine.position import Leg, Position, TradeRecord, leg_value
 from options_bt.errors import DataError
 from options_bt.execution.costs import commission
 from options_bt.execution.fills import FillModel, mid_prices
@@ -62,10 +63,13 @@ class RunResult:
 
 
 class _Run:
-    def __init__(self, config: StrategyConfig, store: QuoteStore, market: MarketData):
+    def __init__(
+        self, config: StrategyConfig, store: QuoteStore, market: MarketData, strategy: Strategy
+    ):
         self.config = config
         self.store = store
         self.market = market
+        self.strategy = strategy
         self.portfolio = Portfolio(config.account.initial_cash)
         self.fills = FillModel(config.costs.fill_fraction, config.costs.fill_fraction_override)
         self.margin = margin_model(config.margin_model)
@@ -74,20 +78,14 @@ class _Run:
         self.quotes: dict[str, Quotes] = {}
         self.last_spot: dict[str, float] = {}
 
-    def commission(self, legs, quantity: int) -> float:
+    def commission(self, legs: Sequence[Leg], quantity: int) -> float:
         costs = self.config.costs
         return commission(legs, quantity, costs.commission_per_contract, costs.per_order_fee)
 
     def mark_value(self) -> float:
         return self.portfolio.mark(self.quotes)[0]
 
-    def step(
-        self,
-        ts: datetime,
-        previous: datetime | None,
-        tbill: float | None,
-        strategy: Strategy,
-    ) -> None:
+    def step(self, ts: datetime, previous: datetime | None, tbill: float | None) -> None:
         portfolio = self.portfolio
         spots = {u: float(chain["underlying_price"][0]) for u, chain in self.chains.items()}
         self.last_spot.update(spots)
@@ -95,7 +93,7 @@ class _Run:
         for record in portfolio.settle_expired(ts, spots, self.config.account.session_close):
             _log_closed(record)
 
-        mark_value, stale = portfolio.mark(self.quotes)
+        marked, stale = portfolio.mark(self.quotes)
         self.stats.stale_marks += stale
 
         if self.config.account.cash_interest and tbill is not None and previous is not None:
@@ -107,13 +105,13 @@ class _Run:
             chains=self.chains,
             quotes=self.quotes,
             positions=portfolio.positions,
-            equity=portfolio.cash + mark_value,
+            equity=portfolio.cash + marked,
             market=self.market,
             history=History(self.store, ts),
             fill_model=self.fills,
             stats=self.stats,
         )
-        orders = strategy.on_step(ctx)
+        orders = self.strategy.on_step(ctx)
         for order in orders:
             if isinstance(order, CloseOrder):
                 self.close(order, ts)
@@ -125,15 +123,19 @@ class _Run:
         position = self.portfolio.positions.get(order.position_id)
         if position is None:
             return
+        if not self._close_at_market(position, ts, order.reason):
+            self.stats.deferred_closes += 1
+            log.warning("close of position %d deferred: no quotes at %s", position.id, ts)
+
+    def _close_at_market(self, position: Position, ts: datetime, reason: str) -> bool:
         quotes = self.quotes.get(position.underlying, {})
         prices = self.fills.prices(quotes, position.legs, opening=False)
         if prices is None:
-            self.stats.deferred_closes += 1
-            log.warning("close of position %d deferred: no quotes at %s", position.id, ts)
-            return
+            return False
         self.add_spread_cost(quotes, position.legs, prices, position.quantity)
         fee = self.commission(position.legs, position.quantity)
-        _log_closed(self.portfolio.close(position.id, prices, ts, fee, order.reason))
+        _log_closed(self.portfolio.close(position.id, prices, ts, fee, reason))
+        return True
 
     def open(self, order: OpenOrder, ts: datetime) -> None:
         quotes = self.quotes.get(order.underlying, {})
@@ -142,8 +144,6 @@ class _Run:
             self.stats.skipped_entries += 1
             log.debug("%s: no quotes to open at %s", order.underlying, ts)
             return
-        for leg, price in zip(order.legs, prices, strict=True):
-            leg.entry_price = price
         net = -leg_value(order.legs, prices)
         req = self.margin.requirement(order.legs, net)
 
@@ -168,42 +168,41 @@ class _Run:
             order.legs,
             quantity,
             ts,
-            self.commission(order.legs, quantity),
-            req,
-            order.tags,
+            prices=prices,
+            commission=self.commission(order.legs, quantity),
+            max_loss=req,
+            tags=order.tags,
         )
         log.info(
-            "opened %s %s x%d net %.2f at %s",
+            "opened %s %s x%d net %.2f at %s (%s)",
             order.underlying,
             "; ".join(f"{leg.qty:+d} {leg.key.right} {leg.key.strike}" for leg in order.legs),
             quantity,
             position.entry_net,
             ts,
+            order.reason,
         )
 
-    def add_spread_cost(self, quotes: Quotes, legs, prices, quantity: int) -> None:
+    def add_spread_cost(
+        self, quotes: Quotes, legs: Sequence[Leg], prices: Sequence[float], quantity: int
+    ) -> None:
         mids = mid_prices(quotes, legs)
         self.stats.spread_cost += abs(leg_value(legs, prices) - leg_value(legs, mids)) * quantity
 
     def close_all_at_end(self, ts: datetime) -> None:
         for position in list(self.portfolio.positions.values()):
-            quotes = self.quotes.get(position.underlying, {})
-            prices = self.fills.prices(quotes, position.legs, opening=False)
-            if prices is not None:
-                self.add_spread_cost(quotes, position.legs, prices, position.quantity)
-                fee = self.commission(position.legs, position.quantity)
-            else:
-                prices = [
-                    intrinsic(leg.key.right, leg.key.strike, self.last_spot[leg.key.underlying])
-                    for leg in position.legs
-                ]
-                fee = 0.0
-                log.warning(
-                    "position %d (%s) closed at intrinsic value: no quotes at the last step",
-                    position.id,
-                    position.underlying,
-                )
-            _log_closed(self.portfolio.close(position.id, prices, ts, fee, "end_of_data"))
+            if self._close_at_market(position, ts, "end_of_data"):
+                continue
+            prices = [
+                intrinsic(leg.key.right, leg.key.strike, self.last_spot[leg.key.underlying])
+                for leg in position.legs
+            ]
+            log.warning(
+                "position %d (%s) closed at intrinsic value: no quotes at the last step",
+                position.id,
+                position.underlying,
+            )
+            _log_closed(self.portfolio.close(position.id, prices, ts, 0.0, "end_of_data"))
 
 
 def _log_closed(record: TradeRecord) -> None:
@@ -246,7 +245,7 @@ def run(
         )
     log.info("run %s: %d steps", config.name, len(timestamps))
 
-    state = _Run(config, store, market)
+    state = _Run(config, store, market, strategy)
     portfolio = state.portfolio
     rows = []
     previous: datetime | None = None
@@ -254,7 +253,7 @@ def run(
         state.chains = {u: store.chain(u, ts) for u in config.underlyings if ts in available[u]}
         state.quotes = {u: index_quotes(chain) for u, chain in state.chains.items()}
         tbill = market.asof("tbill", ts) if has_tbill else None
-        state.step(ts, previous, tbill, strategy)
+        state.step(ts, previous, tbill)
         if i == len(timestamps) - 1:
             state.close_all_at_end(ts)
         rows.append(
