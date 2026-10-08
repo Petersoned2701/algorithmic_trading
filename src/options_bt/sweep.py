@@ -104,13 +104,14 @@ def run_sweep(
     out_dir: Path,
     start: date | None = None,
     end: date | None = None,
+    source: str = "",
 ) -> pl.DataFrame:
     grid, combos = expand(raw)
     rows = []
     for i, (params, concrete) in enumerate(combos, start=1):
         log.info("sweep %d/%d %s", i, len(combos), params)
         try:
-            config = parse_config(concrete)
+            config = parse_config(concrete, source)
         except ConfigError as exc:
             raise ConfigError(f"sweep combination {params}: {exc}") from exc
         result = run(config, store, market, start=start, end=end)

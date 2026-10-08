@@ -98,7 +98,9 @@ def _sweep(args: argparse.Namespace) -> int:
     configure(out_dir / "run.log", args.verbose)
     store = QuoteStore(args.data_root)
     market = MarketData.load(args.data_root)
-    frame = run_sweep(raw, store, market, out_dir, start=args.start, end=args.end)
+    frame = run_sweep(
+        raw, store, market, out_dir, start=args.start, end=args.end, source=f"config {args.config}"
+    )
 
     # run_sweep writes list-valued axes as JSON text, so match the grid to that.
     grid = {

@@ -55,11 +55,12 @@ def test_sweep_writes_results(tmp_path, demo_root, capsys):
     assert lines[1].startswith("robustness: ")
 
 
-def test_config_error_exit_code(tmp_path, capsys):
+@pytest.mark.parametrize("command", ["run", "sweep"])
+def test_config_error_exit_code(tmp_path, capsys, command):
     bad = tmp_path / "bad.yaml"
     bad.write_text("name: x\nbogus: 1\n")
     code = main(
-        ["run", str(bad), "--data-root", str(tmp_path), "--runs-dir", str(tmp_path / "runs")]
+        [command, str(bad), "--data-root", str(tmp_path), "--runs-dir", str(tmp_path / "runs")]
     )
     assert code == 2
     err = capsys.readouterr().err
