@@ -5,11 +5,11 @@ from datetime import date
 from pathlib import Path
 
 import polars as pl
-import yaml
 
 from options_bt.analytics.metrics import annualized_return, max_drawdown, net_return
 from options_bt.data.schema import ny_date_expr
 from options_bt.errors import ConfigError
+from options_bt.loaders import load_yaml
 
 
 @dataclass(frozen=True)
@@ -28,17 +28,8 @@ def _as_date(value: object) -> date:
 
 
 def load_periods(path: Path | str) -> list[Period]:
-    path = Path(path)
-    try:
-        raw = yaml.safe_load(path.read_text())
-    except OSError as exc:
-        raise ConfigError(f"cannot read stress periods {path}: {exc}") from exc
-    except yaml.YAMLError as exc:
-        raise ConfigError(f"invalid YAML in {path}: {exc}") from exc
-    if not isinstance(raw, list):
-        raise ConfigError(f"stress periods {path} must be a YAML list")
     periods = []
-    for i, item in enumerate(raw):
+    for i, item in enumerate(load_yaml(path, list)):
         try:
             period = Period(str(item["name"]), _as_date(item["start"]), _as_date(item["end"]))
         except (TypeError, KeyError, ValueError) as exc:

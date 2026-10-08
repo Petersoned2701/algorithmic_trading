@@ -4,12 +4,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 import polars as pl
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from options_bt.data.schema import QUOTE_SCHEMA, snapshot_ts
 from options_bt.data.store import ImportSummary, write_quotes
-from options_bt.errors import ConfigError, DataError
-from options_bt.strategy.config import load_raw
+from options_bt.errors import DataError
+from options_bt.loaders import load_yaml, validate_model
 
 log = logging.getLogger(__name__)
 
@@ -67,11 +67,7 @@ def _reject_unknown(section: str, values: dict, allowed: set[str]) -> None:
 
 
 def load_mapping(path: str | Path) -> Mapping:
-    path = Path(path)
-    try:
-        return Mapping.model_validate(load_raw(path))
-    except ValidationError as exc:
-        raise ConfigError(f"invalid mapping {path}: {exc}") from exc
+    return validate_model(Mapping, load_yaml(path), f"mapping {path}")
 
 
 def _read(raw_path: Path, fmt: str) -> pl.DataFrame:

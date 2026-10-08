@@ -1,12 +1,10 @@
 from datetime import time
-from pathlib import Path
 from typing import Literal
 
-import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from options_bt.errors import ConfigError
 from options_bt.execution.fills import DEFAULT_FILL_FRACTION
+from options_bt.loaders import validate_model
 
 _RIGHTS = {"put": "P", "p": "P", "call": "C", "c": "C"}
 
@@ -144,24 +142,5 @@ class StrategyConfig(_Model):
     margin_model: str = "defined_risk"
 
 
-def load_raw(path: Path) -> dict:
-    path = Path(path)
-    try:
-        raw = yaml.safe_load(path.read_text())
-    except OSError as exc:
-        raise ConfigError(f"cannot read config {path}: {exc}") from exc
-    except yaml.YAMLError as exc:
-        raise ConfigError(f"invalid YAML in {path}: {exc}") from exc
-    if not isinstance(raw, dict):
-        raise ConfigError(f"config {path} must be a YAML mapping at the top level")
-    return raw
-
-
 def parse_config(raw: dict) -> StrategyConfig:
-    try:
-        return StrategyConfig.model_validate(raw)
-    except ValidationError as exc:
-        lines = [
-            f"{'.'.join(str(part) for part in err['loc'])}: {err['msg']}" for err in exc.errors()
-        ]
-        raise ConfigError("\n".join(lines)) from exc
+    return validate_model(StrategyConfig, raw)

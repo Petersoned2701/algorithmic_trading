@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from options_bt.cli import main
-from options_bt.strategy.config import load_raw, parse_config
+from options_bt.loaders import load_yaml
+from options_bt.strategy.config import parse_config
 
 
 @pytest.fixture(scope="module")
@@ -86,5 +87,5 @@ def test_import_twice_needs_replace_flag(tmp_path, capsys):
 
 
 def test_shipped_pcs_spy_config_parses():
-    config = parse_config(load_raw(Path("configs/pcs_spy_45dte.yaml")))
+    config = parse_config(load_yaml(Path("configs/pcs_spy_45dte.yaml")))
     assert config.name == "pcs_spy_45dte" and config.underlyings == ["SPY"]

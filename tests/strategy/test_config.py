@@ -7,7 +7,7 @@ import yaml
 from options_bt.errors import ConfigError
 from options_bt.execution.fills import DEFAULT_FILL_FRACTION
 from options_bt.strategy.base import RunStats
-from options_bt.strategy.config import load_raw, parse_config
+from options_bt.strategy.config import parse_config
 from tests.helpers import PCS, PCS_NO_FILTERS
 
 
@@ -133,32 +133,6 @@ def test_filter_needs_type():
 def test_unknown_weekday_rejected():
     with pytest.raises(ConfigError, match="weekdays"):
         parse_config(_bad(["entry", "schedule", "weekdays"], ["SAT"]))
-
-
-def test_load_raw_reads_yaml(tmp_path):
-    path = tmp_path / "pcs.yaml"
-    path.write_text(yaml.safe_dump(PCS))
-    assert parse_config(load_raw(path)).name == "pcs_spy_45dte"
-
-
-def test_load_raw_missing_file_names_path(tmp_path):
-    path = tmp_path / "missing.yaml"
-    with pytest.raises(ConfigError, match="missing.yaml"):
-        load_raw(path)
-
-
-def test_load_raw_invalid_yaml(tmp_path):
-    path = tmp_path / "bad.yaml"
-    path.write_text("a: [unclosed")
-    with pytest.raises(ConfigError, match="bad.yaml"):
-        load_raw(path)
-
-
-def test_load_raw_non_mapping(tmp_path):
-    path = tmp_path / "list.yaml"
-    path.write_text("- 1\n- 2\n")
-    with pytest.raises(ConfigError, match="list.yaml"):
-        load_raw(path)
 
 
 def test_run_stats_reject_counts_by_reason():

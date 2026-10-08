@@ -15,8 +15,9 @@ from options_bt.data.market import MarketData
 from options_bt.data.store import ImportSummary, QuoteStore
 from options_bt.engine.loop import run
 from options_bt.errors import BacktestError
+from options_bt.loaders import load_yaml
 from options_bt.logging_setup import configure
-from options_bt.strategy.config import load_raw, parse_config
+from options_bt.strategy.config import parse_config
 from options_bt.sweep import expand, robustness, run_sweep
 
 
@@ -66,7 +67,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run(args: argparse.Namespace) -> int:
-    config = parse_config(load_raw(args.config))
+    config = parse_config(load_yaml(args.config))
     criteria = load_criteria(args.criteria)
     periods = load_periods(args.stress)
 
@@ -94,7 +95,7 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _sweep(args: argparse.Namespace) -> int:
-    raw = load_raw(args.config)
+    raw = load_yaml(args.config)
     out_dir = make_run_dir(args.runs_dir, f"sweep_{raw.get('name', args.config.stem)}")
     configure(out_dir / "run.log", args.verbose)
     store = QuoteStore(args.data_root)

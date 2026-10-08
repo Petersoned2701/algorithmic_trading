@@ -5,10 +5,9 @@ from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
 
-import polars as pl
-
 from options_bt.data.schema import ny_date
-from options_bt.errors import ConfigError, DataError
+from options_bt.errors import ConfigError
+from options_bt.loaders import read_dated_csv
 from options_bt.strategy.base import StepContext
 
 log = logging.getLogger(__name__)
@@ -77,11 +76,7 @@ def iv_rank(
 
 @lru_cache
 def _event_dates(path: Path) -> tuple[date, ...]:
-    try:
-        df = pl.read_csv(path, schema_overrides={"date": pl.Utf8})
-        return tuple(df.select(pl.col("date").str.to_date("%Y-%m-%d", strict=True))["date"])
-    except (pl.exceptions.PolarsError, OSError) as exc:
-        raise DataError(f"cannot read events file {path}: {exc}") from exc
+    return tuple(read_dated_csv(path, "events file")["date"])
 
 
 @register("event_blackout")

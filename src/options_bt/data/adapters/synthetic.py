@@ -11,6 +11,7 @@ from scipy.special import ndtr
 from options_bt.data.schema import QUOTE_SCHEMA, snapshot_ts
 from options_bt.data.store import ImportSummary, write_quotes
 from options_bt.errors import DataError
+from options_bt.loaders import read_csv_or_raise
 
 log = logging.getLogger(__name__)
 
@@ -122,10 +123,7 @@ def generate_chains(
 
 def convert(raw_path: Path, data_root: Path, replace: bool = False, **kwargs) -> ImportSummary:
     """Read a `date,underlying,close` CSV, generate chains per underlying and write them."""
-    try:
-        raw = pl.read_csv(raw_path, try_parse_dates=True)
-    except (OSError, pl.exceptions.PolarsError) as exc:
-        raise DataError(f"cannot read {raw_path}: {exc}") from exc
+    raw = read_csv_or_raise(raw_path, "price path", try_parse_dates=True)
     missing = [c for c in ("date", "underlying", "close") if c not in raw.columns]
     if missing:
         raise DataError(f"{raw_path} is missing columns: {', '.join(missing)}")

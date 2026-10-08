@@ -4,10 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict
 
-from options_bt.errors import ConfigError
-from options_bt.strategy.config import load_raw
+from options_bt.loaders import load_yaml, validate_model
 
 
 class Criteria(BaseModel):
@@ -30,11 +29,7 @@ class CheckResult:
 
 
 def load_criteria(path: Path | str) -> Criteria:
-    try:
-        return Criteria.model_validate(load_raw(Path(path)))
-    except ValidationError as exc:
-        lines = [f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()]
-        raise ConfigError(f"invalid criteria in {path}: " + "; ".join(lines)) from exc
+    return validate_model(Criteria, load_yaml(path), f"criteria in {path}")
 
 
 def _check(name: str, actual: float | None, threshold: float, passes) -> CheckResult:
