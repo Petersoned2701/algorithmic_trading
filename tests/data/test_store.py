@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 import polars as pl
 import pytest
 
-from options_bt.data.chain import ContractKey, find_quote
+from options_bt.data.chain import ContractKey, index_quotes
 from options_bt.data.schema import QUOTE_SCHEMA, snapshot_ts
 from options_bt.data.store import QuoteStore, write_quotes
 from options_bt.errors import DataError
@@ -111,18 +111,15 @@ def test_timestamps_union_and_date_filter(make_store):
     assert st.timestamps(["SPY"], end=date(2024, 1, 3)) == all_ts[:2]
 
 
-def test_find_quote_none_when_absent(make_store):
+def test_index_quotes_maps_every_contract_to_bid_ask(make_store):
     st = QuoteStore(make_store({"SPY": [100.0]}))
     c = st.chain("SPY", st.timestamps(["SPY"])[0])
-    assert find_quote(c, ContractKey("SPY", date(2099, 1, 1), 1.0, "P")) is None
-
-
-def test_find_quote_returns_row_dict(make_store):
-    st = QuoteStore(make_store({"SPY": [100.0]}))
-    c = st.chain("SPY", st.timestamps(["SPY"])[0])
+    index = index_quotes(c)
+    assert len(index) == c.height
     row = c.row(0, named=True)
     key = ContractKey(row["underlying"], row["expiration"], row["strike"], row["right"])
-    assert find_quote(c, key) == row
+    assert index[key] == (row["bid"], row["ask"])
+    assert ContractKey("SPY", date(2099, 1, 1), 1.0, "P") not in index
 
 
 def test_underlying_series(make_store):

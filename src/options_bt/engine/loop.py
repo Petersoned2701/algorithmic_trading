@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 import polars as pl
 
+from options_bt.data.chain import ContractKey, index_quotes
 from options_bt.data.history import History
 from options_bt.data.market import MarketData
 from options_bt.data.schema import NEW_YORK
@@ -12,7 +13,7 @@ from options_bt.engine.portfolio import Portfolio
 from options_bt.engine.position import TradeRecord, leg_value
 from options_bt.errors import DataError
 from options_bt.execution.costs import commission
-from options_bt.execution.fills import FillModel, mid_prices
+from options_bt.execution.fills import FillModel, Quotes, mid_prices
 from options_bt.execution.settlement import intrinsic
 from options_bt.risk.margin import margin_model
 from options_bt.risk.sizing import size
@@ -70,6 +71,7 @@ class _Run:
         self.margin = margin_model(config.margin_model)
         self.stats = RunStats()
         self.chains: dict[str, pl.DataFrame] = {}
+        self.quotes: dict[str, dict[ContractKey, tuple[float, float]]] = {}
         self.last_spot: dict[str, float] = {}
 
     def commission(self, legs, quantity: int) -> float:
@@ -77,7 +79,7 @@ class _Run:
         return commission(legs, quantity, costs.commission_per_contract, costs.per_order_fee)
 
     def mark_value(self) -> float:
-        return self.portfolio.mark(self.chains)[0]
+        return self.portfolio.mark(self.quotes)[0]
 
     def step(
         self,
@@ -93,7 +95,7 @@ class _Run:
         for record in portfolio.settle_expired(ts, spots, self.config.account.session_close):
             _log_closed(record)
 
-        mark_value, stale = portfolio.mark(self.chains)
+        mark_value, stale = portfolio.mark(self.quotes)
         self.stats.stale_marks += stale
 
         if self.config.account.cash_interest and tbill is not None and previous is not None:
@@ -103,6 +105,7 @@ class _Run:
         ctx = StepContext(
             ts=ts,
             chains=self.chains,
+            quotes=self.quotes,
             positions=portfolio.positions,
             equity=portfolio.cash + mark_value,
             market=self.market,
@@ -122,19 +125,19 @@ class _Run:
         position = self.portfolio.positions.get(order.position_id)
         if position is None:
             return
-        chain = self.chains.get(position.underlying)
-        prices = self.fill_prices(chain, position.legs, opening=False)
+        quotes = self.quotes.get(position.underlying, {})
+        prices = self.fills.prices(quotes, position.legs, opening=False)
         if prices is None:
             self.stats.deferred_closes += 1
             log.warning("close of position %d deferred: no quotes at %s", position.id, ts)
             return
-        self.add_spread_cost(chain, position.legs, prices, position.quantity)
+        self.add_spread_cost(quotes, position.legs, prices, position.quantity)
         fee = self.commission(position.legs, position.quantity)
         _log_closed(self.portfolio.close(position.id, prices, ts, fee, order.reason))
 
     def open(self, order: OpenOrder, ts: datetime) -> None:
-        chain = self.chains.get(order.underlying)
-        prices = self.fill_prices(chain, order.legs, opening=True)
+        quotes = self.quotes.get(order.underlying, {})
+        prices = self.fills.prices(quotes, order.legs, opening=True)
         if prices is None:
             self.stats.skipped_entries += 1
             log.debug("%s: no quotes to open at %s", order.underlying, ts)
@@ -159,7 +162,7 @@ class _Run:
             level = logging.WARNING if reason == "undefined_risk" else logging.DEBUG
             log.log(level, "%s: entry rejected at %s: %s", order.underlying, ts, reason)
             return
-        self.add_spread_cost(chain, order.legs, prices, quantity)
+        self.add_spread_cost(quotes, order.legs, prices, quantity)
         position = portfolio.open(
             order.underlying,
             order.legs,
@@ -178,19 +181,16 @@ class _Run:
             ts,
         )
 
-    def fill_prices(self, chain: pl.DataFrame | None, legs, opening: bool) -> list[float] | None:
-        return None if chain is None else self.fills.prices(chain, legs, opening)
-
-    def add_spread_cost(self, chain: pl.DataFrame, legs, prices, quantity: int) -> None:
-        mids = mid_prices(chain, legs)
+    def add_spread_cost(self, quotes: Quotes, legs, prices, quantity: int) -> None:
+        mids = mid_prices(quotes, legs)
         self.stats.spread_cost += abs(leg_value(legs, prices) - leg_value(legs, mids)) * quantity
 
     def close_all_at_end(self, ts: datetime) -> None:
         for position in list(self.portfolio.positions.values()):
-            chain = self.chains.get(position.underlying)
-            prices = self.fill_prices(chain, position.legs, opening=False)
+            quotes = self.quotes.get(position.underlying, {})
+            prices = self.fills.prices(quotes, position.legs, opening=False)
             if prices is not None:
-                self.add_spread_cost(chain, position.legs, prices, position.quantity)
+                self.add_spread_cost(quotes, position.legs, prices, position.quantity)
                 fee = self.commission(position.legs, position.quantity)
             else:
                 prices = [
@@ -254,6 +254,7 @@ def run(
     previous: datetime | None = None
     for i, ts in enumerate(timestamps):
         state.chains = {u: store.chain(u, ts) for u in config.underlyings if ts in available[u]}
+        state.quotes = {u: index_quotes(chain) for u, chain in state.chains.items()}
         tbill = market.asof("tbill", ts) if has_tbill else None
         state.step(ts, previous, tbill, strategy)
         if i == len(timestamps) - 1:

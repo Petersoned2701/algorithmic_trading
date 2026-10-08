@@ -5,6 +5,7 @@ from typing import Protocol
 
 import polars as pl
 
+from options_bt.data.chain import ContractKey
 from options_bt.data.history import History
 from options_bt.data.market import MarketData
 from options_bt.engine.position import Leg, Position
@@ -44,6 +45,7 @@ class RunStats:
 class StepContext:
     ts: datetime
     chains: Mapping[str, pl.DataFrame]
+    quotes: Mapping[str, dict[ContractKey, tuple[float, float]]]
     positions: Mapping[int, Position]
     equity: float
     market: MarketData

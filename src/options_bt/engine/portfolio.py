@@ -2,11 +2,9 @@ import logging
 from collections.abc import Mapping
 from datetime import datetime, time
 
-import polars as pl
-
 from options_bt.data.chain import ContractKey
 from options_bt.engine.position import Leg, Position, TradeRecord, format_legs, leg_value
-from options_bt.execution.fills import mid_prices
+from options_bt.execution.fills import Quotes, mid_prices
 from options_bt.execution.settlement import intrinsic, is_due
 
 log = logging.getLogger(__name__)
@@ -93,13 +91,12 @@ class Portfolio:
                 closed.append(self._finish(position, [], ts, reason))
         return closed
 
-    def mark(self, chains: Mapping[str, pl.DataFrame]) -> tuple[float, int]:
+    def mark(self, quotes: Mapping[str, Quotes]) -> tuple[float, int]:
         total, stale = 0.0, 0
         for position in self.positions.values():
             prices = []
             for leg in position.legs:
-                chain = chains.get(leg.key.underlying)
-                mid = mid_prices(chain, [leg]) if chain is not None else None
+                mid = mid_prices(quotes.get(leg.key.underlying, {}), [leg])
                 if mid is not None:
                     self._last_mid[leg.key] = mid[0]
                     prices.append(mid[0])

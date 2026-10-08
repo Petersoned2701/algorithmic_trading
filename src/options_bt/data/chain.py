@@ -1,22 +1,20 @@
-from dataclasses import dataclass
 from datetime import date
+from typing import NamedTuple
 
 import polars as pl
 
 
-@dataclass(frozen=True)
-class ContractKey:
+class ContractKey(NamedTuple):
     underlying: str
     expiration: date
     strike: float
     right: str
 
 
-def find_quote(chain: pl.DataFrame, key: ContractKey) -> dict | None:
-    rows = chain.filter(
-        (pl.col("underlying") == key.underlying)
-        & (pl.col("expiration") == key.expiration)
-        & (pl.col("strike") == key.strike)
-        & (pl.col("right") == key.right)
+def index_quotes(chain: pl.DataFrame) -> dict[ContractKey, tuple[float, float]]:
+    """Map each contract in one snapshot to its (bid, ask)."""
+    key_columns = (chain[c].to_list() for c in ContractKey._fields)
+    keys = map(ContractKey._make, zip(*key_columns, strict=True))
+    return dict(
+        zip(keys, zip(chain["bid"].to_list(), chain["ask"].to_list(), strict=True), strict=True)
     )
-    return rows.row(0, named=True) if rows.height else None

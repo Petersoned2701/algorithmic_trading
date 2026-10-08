@@ -2,7 +2,7 @@ from datetime import date, time
 
 import pytest
 
-from options_bt.data.chain import ContractKey
+from options_bt.data.chain import ContractKey, index_quotes
 from options_bt.data.schema import snapshot_ts
 from options_bt.engine.portfolio import Portfolio
 from options_bt.execution.settlement import intrinsic, is_due
@@ -156,7 +156,7 @@ def test_due_leg_without_spot_waits_for_a_step_that_has_it():
 def test_stale_mark_counted(spy_chain):
     p = Portfolio(10_000)
     p.open("SPY", [L(-1, "P", 12345.0, price=2.0)], 1, T0, 0, None, {})
-    value, stale = p.mark({"SPY": spy_chain})
+    value, stale = p.mark({"SPY": index_quotes(spy_chain)})
     assert stale == 1 and value == pytest.approx(-200.0)
 
 
@@ -168,7 +168,7 @@ def test_mark_uses_mid_then_last_known_mid(spy_chain):
     assert leg.key == key
     p = Portfolio(10_000)
     p.open("SPY", [leg], 3, T0, 0, None, {})
-    value, stale = p.mark({"SPY": spy_chain})
+    value, stale = p.mark({"SPY": index_quotes(spy_chain)})
     assert stale == 0 and value == pytest.approx(-mid * 100 * 3)
     value, stale = p.mark({})
     assert stale == 1 and value == pytest.approx(-mid * 100 * 3)

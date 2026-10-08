@@ -46,7 +46,7 @@ def test_no_exit_when_pnl_within_limits(ctx_factory):
 
 def test_position_skipped_when_closing_quotes_missing(ctx_factory):
     ctx = ctx_factory(on=date(2024, 1, 9), open_pcs_with_credit=5.0)
-    ctx.chains = {"SPY": ctx.chains["SPY"].head(0)}
+    ctx.quotes = {"SPY": {}}
     assert RuleStrategy(parse_config(PCS_NO_FILTERS)).on_step(ctx) == []
 
 

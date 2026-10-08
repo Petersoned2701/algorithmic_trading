@@ -8,6 +8,7 @@ import polars as pl
 import pytest
 
 from options_bt.data.adapters.synthetic import generate_chains
+from options_bt.data.chain import index_quotes
 from options_bt.data.history import History
 from options_bt.data.market import MarketData
 from options_bt.data.schema import NEW_YORK, snapshot_ts, validate
@@ -105,6 +106,7 @@ def ctx_factory(make_store) -> Callable[..., StepContext]:
         return StepContext(
             ts=ts,
             chains={"SPY": chain},
+            quotes={"SPY": index_quotes(chain)},
             positions=positions,
             equity=100_000.0,
             market=MarketData(series),

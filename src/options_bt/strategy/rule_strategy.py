@@ -29,10 +29,8 @@ class RuleStrategy:
         return orders
 
     def _exit(self, ctx: StepContext, position: Position) -> CloseOrder | None:
-        chain = ctx.chains.get(position.underlying)
-        if chain is None:
-            return None
-        prices = ctx.fill_model.prices(chain, position.legs, opening=False)
+        quotes = ctx.quotes.get(position.underlying, {})
+        prices = ctx.fill_model.prices(quotes, position.legs, opening=False)
         if prices is None:
             return None
         today = ctx.ts.astimezone(NEW_YORK).date()
