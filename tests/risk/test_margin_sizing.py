@@ -20,49 +20,20 @@ def _size(req, **kw):
 
 
 def test_size_by_max_loss_pct():
-    assert size(
-        400.0,
-        equity=20_000,
-        cash=20_000,
-        current_requirement=0,
-        max_loss_pct_equity=2.0,
-        max_total_max_loss_pct=15,
-    ) == (1, None)
+    assert _size(400.0, equity=20_000, cash=20_000) == (1, None)
 
 
 def test_capped_by_portfolio_total():
-    q, _ = size(
-        400.0,
-        equity=100_000,
-        cash=100_000,
-        current_requirement=14_000,
-        max_loss_pct_equity=5.0,
-        max_total_max_loss_pct=15,
-    )
-    assert q == 2
+    assert _size(400.0, current_requirement=14_000, max_loss_pct_equity=5.0) == (2, None)
 
 
 def test_small_account_rejected_size_zero():
-    assert size(
-        400.0,
-        equity=5_000,
-        cash=5_000,
-        current_requirement=0,
-        max_loss_pct_equity=2.0,
-        max_total_max_loss_pct=15,
-    ) == (0, "size_zero")
+    assert _size(400.0, equity=5_000, cash=5_000) == (0, "size_zero")
 
 
 def test_undefined_risk_rejected_by_defined_risk_margin():
     req = DefinedRiskMargin().requirement([L(-1, "C", 100)], 200.0)
-    assert size(
-        req,
-        equity=1e6,
-        cash=1e6,
-        current_requirement=0,
-        max_loss_pct_equity=2,
-        max_total_max_loss_pct=15,
-    ) == (0, "undefined_risk")
+    assert _size(req, equity=1e6, cash=1e6) == (0, "undefined_risk")
 
 
 def test_unknown_margin_model():

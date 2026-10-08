@@ -11,29 +11,21 @@ from options_bt.data.market import MarketData
 from options_bt.data.store import QuoteStore, write_quotes
 from options_bt.engine.loop import run
 from options_bt.engine.position import TradeRecord
+from options_bt.engine.stats import RunStats
 from options_bt.strategy.base import CloseOrder, OpenOrder
 from options_bt.strategy.config import StrategyConfig, parse_config
 from options_bt.strategy.rule_strategy import RuleStrategy
-from tests.helpers import PCS_NO_FILTERS, L
-
-
-def _cfg(exits: dict, initial_cash: float, costs: dict | None = None) -> StrategyConfig:
-    raw = copy.deepcopy(PCS_NO_FILTERS)
-    if costs is not None:
-        raw["costs"] = costs
-    raw["entry"]["schedule"] = {}
-    raw["entry"]["max_open_positions"] = 1
-    raw["exits"] = exits
-    raw["account"] = {"initial_cash": initial_cash}
-    return parse_config(raw)
+from tests.helpers import PCS_NO_FILTERS, L, daily_pcs
 
 
 def no_exit_cfg(initial_cash=100_000) -> StrategyConfig:
-    return _cfg({}, initial_cash)
+    return parse_config(daily_pcs(exits={}, account={"initial_cash": initial_cash}))
 
 
 def pt_cfg(pct, costs: dict | None = None) -> StrategyConfig:
-    return _cfg({"profit_target_pct": pct}, 100_000, costs)
+    return parse_config(
+        daily_pcs(exits={"profit_target_pct": pct}, costs=costs or PCS_NO_FILTERS["costs"])
+    )
 
 
 def test_flat_path_spread_expires_worthless(make_store):
@@ -207,8 +199,7 @@ def test_zero_trade_run_warns_with_dominant_rejection_and_hint(make_store, caplo
 
 
 def test_zero_trade_run_blocked_by_filter_names_it_without_sizing_hint(make_store, caplog):
-    raw = copy.deepcopy(PCS_NO_FILTERS)
-    raw["entry"]["schedule"] = {}
+    raw = daily_pcs()
     raw["entry"]["filters"] = [{"type": "vix_term_structure", "max_ratio": 0.5}]
     series = {
         name: pl.DataFrame({"date": [date(2024, 1, 1)], "value": [value]})
@@ -228,3 +219,12 @@ def test_run_with_trades_does_not_warn_about_zero_trades(make_store, caplog):
     with caplog.at_level(logging.WARNING, logger="options_bt.engine.loop"):
         run(no_exit_cfg(), QuoteStore(make_store({"SPY": [100.0] * 10})), MarketData({}))
     assert "0 trades" not in caplog.text
+
+
+def test_run_stats_reject_counts_by_reason():
+    stats = RunStats()
+    stats.reject("no_contract")
+    stats.reject("no_contract")
+    stats.reject("cap")
+    assert stats.rejections == {"no_contract": 2, "cap": 1}
+    assert RunStats().rejections == {}

@@ -7,6 +7,13 @@ from options_bt.errors import ConfigError, DataError
 from options_bt.strategy.filters import check, validate_filters
 
 
+@pytest.fixture
+def events_file(tmp_path):
+    path = tmp_path / "ev.csv"
+    path.write_text("date,event\n2024-01-10,CPI\n")
+    return str(path)
+
+
 def test_vix_term_structure(ctx_factory):
     assert check(
         {"type": "vix_term_structure", "max_ratio": 1.0}, ctx_factory(vix=15, vix3m=17), "SPY"
@@ -22,10 +29,8 @@ def test_iv_rank_needs_history(ctx_factory):
     )
 
 
-def test_event_blackout(tmp_path, ctx_factory):
-    f = tmp_path / "ev.csv"
-    f.write_text("date,event\n2024-01-10,CPI\n")
-    cfg = {"type": "event_blackout", "file": str(f), "days_before": 1}
+def test_event_blackout(events_file, ctx_factory):
+    cfg = {"type": "event_blackout", "file": events_file, "days_before": 1}
     assert not check(cfg, ctx_factory(on=date(2024, 1, 9)), "SPY")
     assert check(cfg, ctx_factory(on=date(2024, 1, 11)), "SPY")
 
@@ -43,10 +48,8 @@ def test_vix_term_structure_missing_value_blocks_entry(ctx_factory):
     assert not check({"type": "vix_term_structure"}, ctx, "SPY")
 
 
-def test_event_blackout_days_after_and_default_file(tmp_path, ctx_factory):
-    f = tmp_path / "ev.csv"
-    f.write_text("date,event\n2024-01-10,CPI\n")
-    cfg = {"type": "event_blackout", "file": str(f), "days_before": 0, "days_after": 1}
+def test_event_blackout_days_after_and_default_file(events_file, ctx_factory):
+    cfg = {"type": "event_blackout", "file": events_file, "days_before": 0, "days_after": 1}
     assert check(cfg, ctx_factory(on=date(2024, 1, 9)), "SPY")
     assert not check(cfg, ctx_factory(on=date(2024, 1, 10)), "SPY")
     assert not check(cfg, ctx_factory(on=date(2024, 1, 11)), "SPY")

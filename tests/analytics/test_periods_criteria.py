@@ -8,16 +8,7 @@ from options_bt.analytics.periods import Period, load_periods, split_metrics, st
 from options_bt.analytics.report import checks_table
 from options_bt.data.schema import snapshot_ts
 from options_bt.errors import ConfigError
-from tests.helpers import eq
-
-EMPTY_TRADES = pl.DataFrame(
-    {"closed_ts": [], "pnl": [], "commissions": []},
-    schema={
-        "closed_ts": pl.Datetime("us", "UTC"),
-        "pnl": pl.Float64,
-        "commissions": pl.Float64,
-    },
-)
+from tests.helpers import EMPTY_TRADES, eq
 
 V = Period("V", date(2018, 2, 1), date(2018, 2, 28))
 
@@ -32,6 +23,10 @@ def trades(*closes: date) -> pl.DataFrame:
     )
 
 
+def _statuses(*args, **kwargs):
+    return {r.name: r.status for r in evaluate(*args, **kwargs)}
+
+
 def test_stress_table_period_return():
     rows = stress_table(eq([100, 90, 95], start=date(2018, 2, 1)), [V])
     assert rows[0]["return"] == pytest.approx(-0.05)
@@ -40,7 +35,7 @@ def test_stress_table_period_return():
 
 
 def test_stress_table_bounds_inclusive_and_excludes_outside():
-    # Feb 1 (Thu) .. Feb 28 (Wed) inclusive; the rows before/after are ignored.
+    # Feb 1..2 inclusive; the rows before/after are ignored.
     values = [1000, 100, 80, 120, 5000]
     equity = eq(values, start=date(2018, 1, 31))
     rows = stress_table(equity, [Period("P", date(2018, 2, 1), date(2018, 2, 2))])
@@ -113,7 +108,7 @@ def test_criteria_defaults_and_extra_forbidden():
 
 def test_evaluate_pass_fail_na():
     m = {"net_return": 0.2, "excess_annualized_return": None, "max_drawdown": 0.3}
-    res = {r.name: r.status for r in evaluate(Criteria(), m, [{"name": "x", "return": -0.2}], None)}
+    res = _statuses(Criteria(), m, [{"name": "x", "return": -0.2}], None)
     assert res == {
         "net_return": "PASS",
         "excess_return": "N/A",
@@ -148,7 +143,7 @@ def test_evaluate_boundaries():
     m = {"net_return": 0.0, "excess_annualized_return": 0.0, "max_drawdown": 0.25}
     stress = [{"name": "a", "return": -0.15}]
     split = {"out_of_sample": {"net_return": 0.0}}
-    res = {r.name: r.status for r in evaluate(Criteria(), m, stress, split, robustness=0.60)}
+    res = _statuses(Criteria(), m, stress, split, robustness=0.60)
     assert res == {
         "net_return": "FAIL",  # strictly greater
         "excess_return": "FAIL",
@@ -160,12 +155,9 @@ def test_evaluate_boundaries():
 
 
 def test_evaluate_missing_metrics_and_all_none_stress_are_na():
-    res = {
-        r.name: r.status for r in evaluate(Criteria(), {}, [{"name": "a", "return": None}], None)
-    }
+    res = _statuses(Criteria(), {}, [{"name": "a", "return": None}], None)
     assert set(res.values()) == {"N/A"}
-    res = {r.name: r.status for r in evaluate(Criteria(), {}, [], None)}
-    assert res["worst_stress_loss"] == "N/A"
+    assert _statuses(Criteria(), {}, [], None)["worst_stress_loss"] == "N/A"
 
 
 def test_load_periods(tmp_path):
@@ -238,7 +230,7 @@ def test_stress_check_uses_the_worse_of_return_loss_and_drawdown():
 def test_zero_trade_run_makes_return_checks_not_applicable():
     m = {"net_return": 0.0, "excess_annualized_return": 0.03, "max_drawdown": 0.0, "trades": 0}
     split = {"out_of_sample": {"net_return": 0.0}}
-    res = {r.name: r.status for r in evaluate(Criteria(), m, [], split, robustness=0.7)}
+    res = _statuses(Criteria(), m, [], split, robustness=0.7)
     assert res["net_return"] == res["excess_return"] == res["oos_net_return"] == "N/A"
     assert res["max_drawdown"] == "PASS" and res["robustness"] == "PASS"
 

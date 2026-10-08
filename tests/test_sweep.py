@@ -8,16 +8,11 @@ from options_bt.data.market import MarketData
 from options_bt.data.store import QuoteStore
 from options_bt.errors import ConfigError
 from options_bt.sweep import expand, robustness, run_sweep
-from tests.helpers import PCS_NO_FILTERS
+from tests.helpers import daily_pcs
 
 
 def sweepable_pcs(profit: list) -> dict:
-    raw = copy.deepcopy(PCS_NO_FILTERS)
-    raw["entry"]["schedule"] = {}
-    raw["entry"]["max_open_positions"] = 1
-    raw["account"] = {"initial_cash": 100_000}
-    raw["exits"] = {"profit_target_pct": {"sweep": profit}}
-    return raw
+    return daily_pcs(exits={"profit_target_pct": {"sweep": profit}})
 
 
 def test_expand_marker_not_plain_lists():
@@ -107,12 +102,6 @@ def test_robustness_ties_first_in_order_and_none_excluded():
 def test_robustness_none_without_neighbours_or_candidates():
     assert robustness([{"a": 1, "net_return": 0.1, "annualized_return": 0.1}], {"a": [1]}) is None
     assert robustness([{"a": 1, "net_return": 0.1, "annualized_return": None}], {"a": [1]}) is None
-
-
-def test_run_sweep_rows(tmp_path, make_store):
-    raw = sweepable_pcs(profit=[25, 50])
-    df = run_sweep(raw, QuoteStore(make_store({"SPY": [100.0] * 20})), MarketData({}), tmp_path)
-    assert df.height == 2 and (tmp_path / "sweep_results.csv").exists()
 
 
 def test_run_sweep_columns_parquet_and_progress_log(tmp_path, make_store, caplog):

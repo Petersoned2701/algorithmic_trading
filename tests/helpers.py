@@ -1,18 +1,18 @@
-"""Shared test helpers."""
-
 import copy
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import polars as pl
 
 from options_bt.data.chain import ContractKey
 from options_bt.data.schema import snapshot_ts
+from options_bt.data.store import QuoteStore
 from options_bt.engine.position import Leg
 
 E1 = date(2024, 2, 16)
 E2 = date(2024, 3, 15)
 
-T0 = snapshot_ts(date(2024, 1, 2))
+D0 = date(2024, 1, 2)
+T0 = snapshot_ts(D0)
 T1 = snapshot_ts(date(2024, 1, 3))
 EXPIRY_TS = snapshot_ts(E1)
 
@@ -43,10 +43,6 @@ PCS_NO_FILTERS = copy.deepcopy(PCS)
 PCS_NO_FILTERS["entry"]["filters"] = []
 
 
-def expiry_ts(d: date) -> datetime:
-    return snapshot_ts(d)
-
-
 def L(
     qty: int,
     right: str,
@@ -67,18 +63,44 @@ def L(
     )
 
 
-TS_DATE = date(2024, 1, 2)
-TS = snapshot_ts(TS_DATE)
+EMPTY_TRADES = pl.DataFrame(
+    {"closed_ts": [], "pnl": [], "commissions": []},
+    schema={
+        "closed_ts": pl.Datetime("us", "UTC"),
+        "pnl": pl.Float64,
+        "commissions": pl.Float64,
+    },
+)
+
+
+def daily_pcs(**overrides) -> dict:
+    """PCS without filters: enters every day, one position at a time, 100k cash."""
+    raw = copy.deepcopy(PCS_NO_FILTERS)
+    raw["entry"]["schedule"] = {}
+    raw["entry"]["max_open_positions"] = 1
+    raw["account"] = {"initial_cash": 100_000}
+    return {**raw, **overrides}
+
+
+def weekdays(start: date, n: int) -> list[date]:
+    """The first `n` Mon-Fri dates on or after `start`."""
+    days: list[date] = []
+    d = start
+    while len(days) < n:
+        if d.weekday() < 5:
+            days.append(d)
+        d += timedelta(days=1)
+    return days
+
+
+def first_chain(root, underlying: str = "SPY") -> pl.DataFrame:
+    store = QuoteStore(root)
+    return store.chain(underlying, store.timestamps([underlying])[0])
 
 
 def eq(values, start: date = date(2024, 1, 2), tbill: float | None = None) -> pl.DataFrame:
     """Equity frame on consecutive Mon-Fri dates from `start` (ts, equity, tbill only)."""
-    days: list[date] = []
-    d = start
-    while len(days) < len(values):
-        if d.weekday() < 5:
-            days.append(d)
-        d += timedelta(days=1)
+    days = weekdays(start, len(values))
     return pl.DataFrame(
         {
             "ts": [snapshot_ts(x) for x in days],

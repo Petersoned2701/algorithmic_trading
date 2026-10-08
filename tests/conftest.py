@@ -1,4 +1,3 @@
-import copy
 import logging
 from collections.abc import Callable
 from datetime import date, timedelta
@@ -16,11 +15,12 @@ from options_bt.data.store import QuoteStore, write_quotes
 from options_bt.engine.loop import RunResult, run
 from options_bt.engine.portfolio import Portfolio
 from options_bt.engine.position import max_loss
+from options_bt.engine.stats import RunStats
 from options_bt.execution.fills import FillModel
-from options_bt.strategy.base import RunStats, StepContext
+from options_bt.strategy.base import StepContext
 from options_bt.strategy.config import parse_config
 from options_bt.strategy.selectors import select_legs
-from tests.helpers import PCS_NO_FILTERS
+from tests.helpers import PCS_NO_FILTERS, daily_pcs, weekdays
 
 
 @pytest.fixture(autouse=True)
@@ -38,11 +38,7 @@ def make_store(tmp_path: Path) -> Callable[..., Path]:
     def _make(paths: dict[str, list[float]], start: date = date(2024, 1, 2), **gen_kwargs) -> Path:
         frames = []
         for underlying, closes in paths.items():
-            days, d = [], start
-            while len(days) < len(closes):
-                if d.weekday() < 5:
-                    days.append(d)
-                d += timedelta(days=1)
+            days = weekdays(start, len(closes))
             frames.append(
                 generate_chains(underlying, list(zip(days, closes, strict=True)), **gen_kwargs)
             )
@@ -117,9 +113,5 @@ def ctx_factory(make_store) -> Callable[..., StepContext]:
 
 @pytest.fixture
 def small_result(make_store) -> RunResult:
-    raw = copy.deepcopy(PCS_NO_FILTERS)
-    raw["entry"]["schedule"] = {}
-    raw["entry"]["max_open_positions"] = 1
-    raw["account"] = {"initial_cash": 100_000}
     root = make_store({"SPY": [100.0] * 10})
-    return run(parse_config(raw), QuoteStore(root), MarketData({}))
+    return run(parse_config(daily_pcs()), QuoteStore(root), MarketData({}))

@@ -15,12 +15,12 @@ from options_bt.analytics.metrics import (
     trade_stats,
 )
 from options_bt.data.schema import snapshot_ts
-from options_bt.strategy.base import RunStats
-from tests.helpers import eq
+from options_bt.engine.stats import RunStats
+from tests.helpers import EMPTY_TRADES, eq
 
 
-def test_max_drawdown():
-    assert max_drawdown(eq([100, 110, 99, 120]))[0] == pytest.approx(0.1)
+def _metrics(equity, trades=EMPTY_TRADES, stats=None, dropped_rows=0):
+    return compute_metrics(equity, trades, stats or RunStats(), dropped_rows=dropped_rows)
 
 
 def test_max_drawdown_days_recovered():
@@ -36,7 +36,7 @@ def test_max_drawdown_days_never_recovered_counts_to_last_ts():
 
 
 def test_max_drawdown_longest_stretch_not_deepest():
-    # deep short dip (1 day) then shallow long dip (4 days)
+    # deep short dip (2 days) then shallow long dip (6 days)
     dd, days = max_drawdown(eq([100, 50, 100, 110, 109, 109, 109, 110]))
     assert dd == pytest.approx(0.5)
     assert days == 6
@@ -107,7 +107,7 @@ def test_sortino_none_without_downside():
 
 
 def test_trade_stats_empty_is_safe():
-    s = trade_stats(pl.DataFrame(schema={"pnl": pl.Float64, "commissions": pl.Float64}))
+    s = trade_stats(EMPTY_TRADES)
     assert s["trades"] == 0 and s["win_rate"] is None
     assert s["avg_win"] is None and s["avg_loss"] is None
     assert s["profit_factor"] is None and s["worst_trade"] is None
@@ -128,22 +128,20 @@ def test_trade_stats_all_winners():
 
 
 def test_spread_cost_in_metrics():
-    m = compute_metrics(
+    m = _metrics(
         eq([100.0, 101.0]),
         pl.DataFrame({"pnl": [10.0], "commissions": [2.0]}),
         RunStats(spread_cost=8.0),
-        dropped_rows=0,
     )
     assert m["costs_pct_gross_pnl"] == pytest.approx(0.5)
     assert m["total_spread_cost"] == 8.0
 
 
 def test_costs_pct_none_when_denominator_not_positive():
-    m = compute_metrics(
+    m = _metrics(
         eq([100.0, 99.0]),
         pl.DataFrame({"pnl": [-30.0], "commissions": [2.0]}),
         RunStats(spread_cost=8.0),
-        dropped_rows=0,
     )
     assert m["costs_pct_gross_pnl"] is None
 
@@ -152,7 +150,7 @@ def test_compute_metrics_full_and_json_serialisable():
     stats = RunStats(stale_marks=3, deferred_closes=1, skipped_entries=2, rejections={"cap": 4})
     trades = pl.DataFrame({"pnl": [100.0, -50.0], "commissions": [1.0, 1.0]})
     e = eq([100.0, 102.0, 101.0, 104.0], tbill=4.0)
-    m = compute_metrics(e, trades, stats, dropped_rows=7)
+    m = _metrics(e, trades, stats, dropped_rows=7)
     assert m["net_return"] == pytest.approx(0.04)
     assert m["annualized_tbill"] == pytest.approx(0.04)
     assert m["excess_annualized_return"] == pytest.approx(m["annualized_return"] - 0.04)
@@ -165,24 +163,14 @@ def test_compute_metrics_full_and_json_serialisable():
 
 
 def test_compute_metrics_without_tbill_or_trades():
-    m = compute_metrics(
-        eq([100.0, 101.0]).drop("tbill"),
-        pl.DataFrame(schema={"pnl": pl.Float64, "commissions": pl.Float64}),
-        RunStats(),
-        dropped_rows=0,
-    )
+    m = _metrics(eq([100.0, 101.0]).drop("tbill"))
     assert m["annualized_tbill"] is None and m["excess_annualized_return"] is None
     assert m["costs_pct_gross_pnl"] is None
     json.dumps(m)
 
 
 def test_compute_metrics_short_equity():
-    m = compute_metrics(
-        eq([100.0]),
-        pl.DataFrame(schema={"pnl": pl.Float64, "commissions": pl.Float64}),
-        RunStats(),
-        dropped_rows=0,
-    )
+    m = _metrics(eq([100.0]))
     assert m["net_return"] == 0.0 and m["max_drawdown"] == 0.0 and m["max_drawdown_days"] == 0
     assert m["sharpe"] is None and m["sortino"] is None
 
@@ -200,11 +188,6 @@ def test_sharpe_sortino_none_for_zero_span():
 
 def test_annualized_return_wiped_out_does_not_raise():
     assert annualized_return(eq([100, 50, -10])) == -1.0
-    m = compute_metrics(
-        eq([100, 50, -10]),
-        pl.DataFrame(schema={"pnl": pl.Float64, "commissions": pl.Float64}),
-        RunStats(),
-        dropped_rows=0,
-    )
+    m = _metrics(eq([100, 50, -10]))
     assert m["annualized_return"] == -1.0 and m["net_return"] == pytest.approx(-1.1)
     json.dumps(m)
